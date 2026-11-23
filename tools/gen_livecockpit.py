@@ -20,12 +20,12 @@ mv = json.load(open(os.path.join(LAYOUTS, 'mview.json')))
 base = mv['widgets'][0]
 
 # the scale's line, like BMW's M Performance view (M8 / Z4 M40i photos, Nov 23 2026): straight pieces with rounded
-# corners (60-120 px: firmer than M view's wide arcs, softer than hard knees), the top running nearly level (3 degrees),
+# corners (110-180 px: soft transitions, the straight pieces still clear between them), the top running nearly level (3 degrees),
 # clear of the hood (visible.js HOOD). Corners: (x, y, corner radius), from the end by the middle (a short
 # raised piece, then a step down, as BMW's bottom line by the check-control area) round to the top end. Written as
 # points where straight pieces and arcs meet plus "arcs" [cx, cy, r, sweep] per piece, as the shader takes it.
-CORNERS = [(842, 619, 0), (776, 619, 10), (752, 636, 10), (340, 636, 70), (120, 455, 60), (110, 320, 70),
-           (250, 92, 120), (742, 64, 0)]
+CORNERS = [(842, 619, 0), (776, 619, 16), (752, 636, 16), (340, 636, 130), (120, 455, 110), (110, 320, 120),
+           (250, 92, 180), (742, 64, 0)]
 START_X = CORNERS[0][0]
 
 
