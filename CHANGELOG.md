@@ -2,6 +2,10 @@
 
 Newest first. Dates are when the build was pushed.
 
+## Nov 23 2026
+
+- **Cluster Themes 0.19.10:** a new theme, **Live Cockpit**, after BMW's own Live Cockpit Professional standard view: the speed scale on the left, the rev scale on the right (round lines like M view's), the speed under the line and the gear over it, an orange-red needle with BMW's red glow. Four bracket gauges like BMW's sport displays, labelled **Coolant**, **Oil**, **EGS** (gearbox oil) and **Mileage** (fuel consumption now), with the average consumption beside it from BMW's own trip computer (trip 1). For plug-in hybrids the high-voltage battery sits in the lower right corner. The Waze map opens in the middle. New readouts: **Gearbox oil temperature**, **Fuel consumption now** and **Fuel consumption, this drive**, read from the engine unit over the read-only link (fuel flow 5656, gearbox temperature 4650 on the B48 / B58 DME, from cauliflowermossgrape's Live Data catalog). Not yet tested on a car.
+
 ## Nov 22 2026
 
 - **Cluster Themes 0.19.9, HUD Widgets 0.15.8:** M view's scale lines are now perfectly round curves (before, they bent in small corners you could see on the car). The holiday lights were redone on every theme: they never cross a theme's own lines, hang the same on both sides, and leave out the short pieces that looked broken. On M view they hang between the two dials under the M stripes, and on Vector they no longer run into the rev counter or the music panel. Not yet tested on a car.

@@ -61,6 +61,21 @@ The look of the M view in the newer M cars' Live Cockpit (M3, M4, M5), for any c
 
 <p align="center"><img src="../../docs/images/cluster-mview.png" width="900" alt="M view theme"></p>
 
+### Live Cockpit
+
+The look of BMW's own Live Cockpit Professional standard view (G20, G30, G05 and others), with extras for plug-in hybrids.
+
+- **Left:** speed along a white line with rounded corners, 0 to 200 mph (0 to 330 km/h), an orange-red needle with BMW's red glow and a warm trail from 0 to the needle. The speed in big figures under the line, with its unit.
+- **Right:** revs the same way, 0 to 8000 rpm, with a red band from your redline. The gear over the line, the drive mode under it.
+- **Bracket gauges:** two in each dark panel, like BMW's sport displays, from left to right **Coolant** and **Oil** (50 to 150 °C), then **EGS** (gearbox oil, 50 to 150 °C) and **Mileage** (fuel consumption now, 0 to 30 l/100 km), each with its value on top. Beside Mileage, the average consumption (Ø) from BMW's own trip computer. Coolant and oil go red over your warning limits, the gearbox from 120 °C.
+- **Corners:** fuel on the far left and the **hybrid battery** on the far right, with its charge in % above the dial.
+- **Middle:** with "Show Waze map inside the theme" on, the map shows in an oval window between the two scales, and the window opens and closes without the theme being built again.
+- **Bottom:** BMW's check-control frame in the middle; range, clock and outside temperature along the bottom, with BMW's own gear letter.
+
+The gearbox oil temperature is read over the read-only link, first as the engine unit has it (DID 4650 on the B48 / B58 DME8FF_R), else from the gearbox unit (EGS); not yet checked on a car (`config.dme.gearbox`), and the log says which one answered. The consumption now comes from the engine unit's own fuel flow (DID 5656 on the B48 / B58 DME8FF_R, else 4521, OBD 5E, or the air mass as an estimate) over the speed; electric driving reads 0. The average (Ø) is BMW's own trip computer average (trip 1, as in the cluster) from the head unit; only if the car doesn't send it, this drive's own. Not yet checked on a car (`config.dme.fuelRate`). The layout is written by `tools/gen_livecockpit.py`.
+
+<p align="center"><img src="../../docs/images/cluster-livecockpit.png" width="900" alt="Live Cockpit theme"></p>
+
 ### Vector
 
 A race-sim style dash with angled frames and a music panel.
@@ -138,7 +153,7 @@ More themes are on the way.
 ## Settings
 
 - **Theme**, and one per drive mode.
-- **Readouts:** pick which car sensor each GT3, M, Track, Drag, Rally, Retro 80s or Dyno readout shows (speed, rpm, boost, temperatures, tyres, fuel, g, power and more). Plug-in hybrids can also show **Hybrid battery**, the high-voltage battery's charge in % (not yet checked on a hybrid).
+- **Readouts:** pick which car sensor each GT3, M, Track, Drag, Rally, Retro 80s or Dyno readout shows (speed, rpm, boost, temperatures including gearbox oil, tyres, fuel, g, power and more). Plug-in hybrids can also show **Hybrid battery**, the high-voltage battery's charge in % (not yet checked on a hybrid).
 - **Show Waze map inside the theme:** GT3, Sport and M open a window in the middle and Waze on Cluster draws its map in it, above BMW's own map view, so nothing shows twice. When the map goes away the theme fills back in. While it is on, Waze's map on the HUD is off. Needs robertnisipeanu's Waze on Cluster; turning it off gives Waze its usual place back.
 - **Badge:** the model name, like "BMW X3 M40i", as text in the theme's font (GT3 top left, Sport, M and Minimal top centre, where BMW puts its own). Off by default.
 - **Warnings:** oil, coolant and boost limits. A readout over its limit flashes red (oil 130°C and coolant 115°C by default, boost off).

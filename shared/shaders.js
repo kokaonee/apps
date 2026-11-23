@@ -1757,4 +1757,236 @@ void main() {
 }
 `;
 
-module.exports = { shiftbar: SHIFTBAR, arc: ARC, revbar: REVBAR, lights: LIGHTS, fill: FILL, box: BOX, grid: GRID, segbar: SEGBAR, mdash: MDASH, mtach: MTACH, sdash: SDASH, boxes: BOXES, atext: ATEXT, meter: METER, gmeter: GMETER, revarc: REVARC, tiles: TILES, ribbon: RIBBON, deco: DECO, mview: MVIEW, vdash: VDASH };
+const LCP = `// The Live Cockpit theme (layout livecockpit.json) in one cluster-render "effect" layer (GLSL ES 1.00), after the
+// Live Cockpit Professional's standard view: black everywhere (opaque), the speed scale on the left and the rev scale on
+// the right (its mirror): a white outer line with rounded corners (u_path, the left one, from its bottom end to its top
+// end), marks inside it, the dark panels with a chevron edge towards the middle, an orange-red needle reaching inwards
+// with BMW's red dotted glow and a warm trail from 0 to the value, a red band inside the rev line from the redline; the
+// fuel dial in the lower left corner and the hybrid battery dial in the lower right one (its mirror); two bracket gauges
+// in each panel along the chevron edge (inner u_bar: oil left, gearbox right; outer u_bar2: coolant left, fuel
+// consumption right); the line over the speed (left) and under the gear (right,
+// u_lineR), the bottom lines and BMW's check-control tray in the middle (u_tray). The middle is cut see-through for the
+// Waze map while u_hole is set ("mapLive"). v_uv (0,0) is the top-left. Derived from the mview shader above.
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 v_uv;
+uniform vec2 u_size;
+uniform vec2 u_path[16];   // the left scale's line, layer px: the points where its straight pieces and arcs meet
+uniform vec4 u_arc[16];    // piece i (point i to i + 1): arc centre x, y, radius, sweep (radians); radius 0 = straight
+uniform float u_cum[16];   // arc length at each point
+uniform float u_n;         // points used
+uniform vec4 u_scale;      // arc length at 0 and at the top mark, -, the line's whole length
+uniform vec4 u_ticks;      // speed: numbered marks, steps per number; rpm: the same
+uniform float u_speed;     // 0..1
+uniform float u_rpm;       // 0..1
+uniform float u_redFrom;   // 0..1 of the rev scale
+uniform vec4 u_dial;       // fuel dial: centre x, y, radius (the battery dial is its mirror)
+uniform vec2 u_dialAng;    // its angle (degrees, 0 = right, 90 = down) at full and at empty
+uniform float u_fuel;      // 0..1
+uniform float u_soc;       // 0..1, the hybrid battery; < 0: unknown (no mark)
+uniform vec4 u_line;       // the line over the speed: from x, to x, y; the bottom line runs on to x
+uniform vec4 u_lineR;      // the line under the gear (mirrored frame): from x, to x, y
+uniform vec4 u_tray;       // the check-control tray: left x, right x, top y, corner radius (layer px, not mirrored)
+uniform vec4 u_bar;        // the bracket gauges (mirrored frame): offset from the chevron edge, width, top y, bottom y
+uniform vec4 u_barV;       // left value 0..1, right value 0..1 (< 0: unknown), left hot, right hot (1 = over the limit)
+uniform vec2 u_bar2;       // the outer bracket gauges: offset from the chevron edge, width (0 = none); top / bottom as u_bar
+uniform vec4 u_barV2;      // as u_barV for the outer ones
+uniform vec4 u_hole;       // the map window x, y, w, h (w 0 = none)
+uniform float u_holeR;
+uniform vec4 u_panel;      // the dark panel's inner edge: its top point x, y and its point at the middle x, y
+uniform vec4 u_panelB;     // its bottom point x, y; z: how far inside the line the panel starts (0 = no panel)
+uniform float u_oval;      // > 0: the map window is an oval inside u_hole, feathered over this many px
+
+const vec3 WHITE = vec3(0.92, 0.93, 0.95);
+const vec3 GREY = vec3(0.55, 0.57, 0.6);
+const vec3 PANEL = vec3(0.095, 0.1, 0.11);
+const vec3 RED = vec3(0.95, 0.1, 0.12);
+const vec3 NEEDLE = vec3(1.0, 0.36, 0.08);
+
+float cov(float d) { return clamp(0.5 - d, 0.0, 1.0); }
+vec3 put(vec3 c, vec3 col, float a) { return mix(c, col, clamp(a, 0.0, 1.0)); }
+
+// a bracket gauge along the upper chevron edge, x0..x1 px inside it: two thin rails and a cap, lit from the bottom up
+vec3 bracket(vec3 c, float inner, float y, float x0, float x1, float top, float bot, float bv, float hot) {
+    float yv = mix(bot, top, clamp(bv, 0.0, 1.0));
+    float inY = step(top, y) * step(y, bot);
+    float rails = (cov(abs(inner - x0) - 1.0) + cov(abs(inner - x1) - 1.0)) * inY;
+    float cap = cov(abs(y - bot) - 1.0) * step(x0, inner) * step(inner, x1);
+    c = put(c, GREY, rails * 0.9 + cap);
+    if (bv >= 0.0) {
+        float body = step(x0 + 4.0, inner) * step(inner, x1 - 4.0) * smoothstep(yv - 1.0, yv + 1.0, y) * inY;
+        float fade = 0.35 + 0.65 * (y - top) / max(bot - top, 1.0);
+        c = put(c, hot > 0.5 ? RED : WHITE, body * fade * 0.85);
+        float tip = cov(abs(y - yv) - 2.0) * step(x0 - 3.0, inner) * step(inner, x1 + 3.0);
+        c = put(c, hot > 0.5 ? RED : NEEDLE, tip);
+    }
+    return c;
+}
+
+void main() {
+    vec2 p = v_uv * u_size;
+    bool right = p.x > u_size.x * 0.5;
+    vec2 q = right ? vec2(u_size.x - p.x, p.y) : p;
+    vec3 c = vec3(0.0);
+
+    // the nearest point of the line: its arc length s and the signed distance sd (+ inside the scale); the corners
+    // are true arcs (as mview), so the curve stays round
+    float best = 1e6, s = 0.0, sd = 0.0;
+    for (int i = 0; i < 15; i++) {
+        if (float(i) >= u_n - 1.0) break;
+        vec2 a = u_path[i], b = u_path[i + 1];
+        vec4 ar = u_arc[i];
+        vec2 n, t;
+        float along;
+        if (ar.z > 0.5) {
+            vec2 ca = a - ar.xy, cq = q - ar.xy;
+            float rel = atan(ca.x * cq.y - ca.y * cq.x, dot(ca, cq));
+            float h = clamp(rel / ar.w, 0.0, 1.0);
+            float ang = atan(ca.y, ca.x) + ar.w * h;
+            vec2 u = vec2(cos(ang), sin(ang));
+            n = ar.xy + u * ar.z;
+            t = vec2(-u.y, u.x) * sign(ar.w);
+            along = abs(ar.w) * ar.z * h;
+        } else {
+            vec2 ba = b - a;
+            float L = max(length(ba), 0.001);
+            float h = clamp(dot(q - a, ba) / (L * L), 0.0, 1.0);
+            n = a + ba * h; t = ba / L; along = h * L;
+        }
+        vec2 d = q - n;
+        float dist = length(d);
+        if (dist < best) { best = dist; s = u_cum[i] + along; sd = t.x * d.y - t.y * d.x; }
+    }
+    float total = u_scale.w, s0 = u_scale.x, s1 = u_scale.y;
+    float v = right ? u_rpm : u_speed;
+    float sv = mix(s0, s1, v);
+    float f = (s - s0) / (s1 - s0);
+
+    // the dark panel inside the scale, and how far a point is inside its chevron edge (inner)
+    vec2 t = u_panel.xy, m = u_panel.zw, b = u_panelB.xy;
+    float ex, slope;
+    if (q.y < m.y) { float h = (q.y - t.y) / (m.y - t.y); ex = mix(t.x, m.x, h); slope = (m.x - t.x) / (m.y - t.y); }
+    else { float h = (q.y - m.y) / (b.y - m.y); ex = mix(m.x, b.x, h); slope = (b.x - m.x) / (b.y - m.y); }
+    float inner = (ex - q.x) / sqrt(1.0 + slope * slope);
+    if (u_panelB.z > 0.0 && sd > 0.0) {
+        float pm = clamp(inner + 0.5, 0.0, 1.0) * smoothstep(u_panelB.z, u_panelB.z + 3.0, sd) * step(t.y, q.y);
+        c = put(c, PANEL * (1.0 + 0.45 * exp(-(sd - u_panelB.z) / 110.0)), pm);
+    }
+
+    // the bracket gauges along the upper chevron edge
+    if (u_bar.y > 0.0 && q.y >= u_bar.z - 2.0 && q.y <= u_bar.w + 2.0) {
+        c = bracket(c, inner, q.y, u_bar.x, u_bar.x + u_bar.y, u_bar.z, u_bar.w, right ? u_barV.y : u_barV.x, right ? u_barV.w : u_barV.z);
+        if (u_bar2.y > 0.0)
+            c = bracket(c, inner, q.y, u_bar2.x, u_bar2.x + u_bar2.y, u_bar.z, u_bar.w, right ? u_barV2.y : u_barV2.x, right ? u_barV2.w : u_barV2.z);
+    }
+
+    if (best < 160.0) {
+        // the warm trail from 0 up to the value, brightest by the needle and by the line
+        if (s >= s0 - 6.0 && s <= sv && sd > 0.0 && sd < 110.0) {
+            float toward = 0.12 + 0.88 * exp(-(sv - s) / 260.0);
+            float inward = pow(1.0 - sd / 110.0, 1.4);
+            float lit = toward * inward * smoothstep(s0 - 6.0, s0 + 10.0, s);
+            c = put(c, vec3(0.75, 0.14, 0.06), lit * 0.55);
+        }
+        // BMW's red glow by the needle, at any value (also at 0, parked): red dots fading along and inwards
+        if (sd > 0.0 && sd < 130.0 && s > s0 - 90.0) {
+            vec2 cell = mod(p, 6.0) - 3.0;
+            float spot = cov(length(cell) - 1.5);
+            float glow = exp(-abs(s - sv) / 70.0) * (1.0 - smoothstep(20.0, 130.0, sd)) * smoothstep(s0 - 90.0, s0 - 30.0, s);
+            c = put(c, RED, spot * glow * 0.85);
+            c = put(c, RED * 0.35, glow * 0.4);
+        }
+        // the line: white, fading out at both ends
+        float ends = smoothstep(0.0, 40.0, s) * smoothstep(0.0, 30.0, total - s);
+        c = put(c, WHITE, cov(abs(sd) - 1.7) * ends);
+        c = put(c, WHITE * 0.5, exp(-abs(sd) / 3.0) * ends * 0.35);
+        // the marks inside it: a long one at each number and a short one between two
+        vec2 tk = right ? u_ticks.zw : u_ticks.xy;
+        float stp = (s1 - s0) / (tk.x * tk.y);
+        float tt = (s - s0) / stp, k = floor(tt + 0.5);
+        float along = abs(tt - k) * stp;
+        bool major = mod(k, tk.y) < 0.5;
+        float len = major ? 30.0 : 14.0;
+        if (k >= 0.0 && k <= tk.x * tk.y && sd > 0.0) {
+            float a = cov(along - (major ? 1.7 : 1.1)) * cov(sd - len) * smoothstep(2.0, 4.0, sd);
+            c = put(c, major ? WHITE : GREY, a);
+        }
+        // the rev scale: a red band just inside the line from the redline on
+        if (right && f >= u_redFrom && f <= 1.0) c = put(c, RED, cov(abs(sd - 7.0) - 3.5));
+        // the needle: an orange-red bar from just outside the line inwards, with a soft glow
+        float across = abs(s - sv);
+        float reach = smoothstep(-12.0, -6.0, sd) * (1.0 - smoothstep(48.0, 56.0, sd));
+        c = put(c, NEEDLE * 0.6, exp(-across / 6.0) * reach * 0.5);
+        c = put(c, NEEDLE, cov(across - 2.6) * reach);
+    }
+
+    // the corner dial: fuel (left) or the hybrid battery (right), its value as a red mark
+    vec2 dp = q - u_dial.xy;
+    float r = length(dp);
+    float ang = degrees(atan(dp.y, dp.x));
+    float a0 = u_dialAng.x, a1 = u_dialAng.y;
+    float df = (ang - a1) / (a0 - a1);          // 0 empty .. 1 full
+    float arcLen = radians(abs(a0 - a1)) * u_dial.z;
+    if (df > -0.03 && df < 1.03 && abs(r - u_dial.z) < 40.0) {
+        float inArc = smoothstep(-0.02, 0.0, df) * (1.0 - smoothstep(1.0, 1.02, df));
+        c = put(c, df < 0.12 ? RED : WHITE, cov(abs(r - u_dial.z) - 1.5) * inArc);
+        float dv = right ? u_soc : u_fuel;
+        if (dv >= 0.0) {
+            float mk = cov(abs(df - dv) * arcLen - 3.0) * cov(abs(r - u_dial.z + 12.0) - 12.0);
+            c = put(c, right ? NEEDLE : RED, mk);
+        }
+        for (int j = 0; j < 3; j++) {
+            float tf = float(j) * 0.5;
+            c = put(c, WHITE, cov(abs(df - tf) * arcLen - 1.2) * cov(abs(r - u_dial.z + 8.0) - 8.0) * 0.9);
+        }
+    }
+
+    // the line over the speed (left) and under the gear (right), with the double dash at the outer end
+    vec4 ln = right ? u_lineR : u_line;
+    if (q.x >= ln.x && q.x <= ln.y) {
+        float x0 = ln.x + 56.0;
+        if (q.x < x0 - 8.0) {
+            c = put(c, WHITE, cov(abs(abs(q.y - ln.z) - 4.0) - 1.6));
+        } else if (q.x >= x0) {
+            float fade = smoothstep(x0, x0 + 60.0, q.x) * (1.0 - smoothstep(ln.y - 4.0, ln.y, q.x));
+            c = put(c, WHITE, cov(abs(q.y - ln.z) - 1.2) * (0.35 + 0.65 * fade));
+        }
+    }
+    // the bottom line, on from the scale's bottom end towards the middle
+    vec2 b0 = u_path[0];
+    if (q.x >= b0.x && q.x <= u_line.w) {
+        float fade = 1.0 - smoothstep(u_line.w - 90.0, u_line.w, q.x);
+        c = put(c, WHITE, cov(abs(q.y - b0.y) - 1.2) * fade);
+    }
+    // BMW's check-control tray between the scales: a flat top with rounded corners running down to the bottom line
+    if (u_tray.w > 0.0) {
+        float rr = u_tray.w;
+        vec2 cl = vec2(u_tray.x + rr, u_tray.z + rr), cr = vec2(u_tray.y - rr, u_tray.z + rr);
+        float dT;
+        if (p.x < cl.x) dT = p.y <= cl.y ? abs(length(p - cl) - rr) : abs(p.x - u_tray.x);
+        else if (p.x > cr.x) dT = p.y <= cr.y ? abs(length(p - cr) - rr) : abs(p.x - u_tray.y);
+        else dT = abs(p.y - u_tray.z);
+        float lowEnd = 1.0 - smoothstep(b0.y - 24.0, b0.y - 4.0, p.y);
+        c = put(c, GREY, cov(dT - 1.2) * lowEnd * step(u_tray.z - 2.0, p.y));
+    }
+
+    float alpha = 1.0;
+    if (u_hole.z > 0.0 && u_oval > 0.0) {
+        vec2 hs = u_hole.zw * 0.5;
+        vec2 e = (p - (u_hole.xy + hs)) / hs;
+        float ed = (length(e) - 1.0) * min(hs.x, hs.y);
+        alpha = smoothstep(-u_oval, 0.0, ed);
+    } else if (u_hole.z > 0.0) {
+        vec2 hs = u_hole.zw * 0.5;
+        vec2 hq = abs(p - (u_hole.xy + hs)) - (hs - vec2(u_holeR));
+        float hd = length(max(hq, 0.0)) + min(max(hq.x, hq.y), 0.0) - u_holeR;
+        alpha = clamp(hd + 0.5, 0.0, 1.0);
+    }
+    gl_FragColor = vec4(c, alpha);
+}
+`;
+
+module.exports = { shiftbar: SHIFTBAR, arc: ARC, revbar: REVBAR, lights: LIGHTS, fill: FILL, box: BOX, grid: GRID, segbar: SEGBAR, mdash: MDASH, mtach: MTACH, sdash: SDASH, boxes: BOXES, atext: ATEXT, meter: METER, gmeter: GMETER, revarc: REVARC, tiles: TILES, ribbon: RIBBON, deco: DECO, mview: MVIEW, vdash: VDASH, lcp: LCP };

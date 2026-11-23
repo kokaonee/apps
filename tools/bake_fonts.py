@@ -74,6 +74,8 @@ CLUSTER_FONTS = [
     ('s_unit', 'Barlow-Medium.ttf', 24, LOWER + UPPER + DIGITS + '°/-. '),
     ('s_label', 'BarlowSemiCondensed-SemiBold.ttf', 30, UPPER + DIGITS + ' .'),
     ('s_gl', 'Michroma-Regular.ttf', 21, DIGITS + '/', 1),
+    # Live Cockpit: the bracket gauges' labels and values, German umlauts included (ÖL, GETRIEBE)
+    ('k_lab', 'Barlow-Medium.ttf', 24, UPPER + LOWER + DIGITS + 'ÄÖÜäöüØ°%/.:+- ', 0, None, None, 'Ø'),   # Ø: the average consumption (tucked, the cell keeps its height)
     # Vector: the music panel's song title and artist (any printable ASCII: a song's text is folded to it, hud.js
     # mediaText), the ring gauges' numbers and labels, the track time
     ('v_title', 'BarlowSemiCondensed-SemiBold.ttf', 38, ''.join(chr(i) for i in range(32, 127))),

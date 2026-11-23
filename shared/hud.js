@@ -84,6 +84,14 @@
  *             "panel" [[top x, y], [middle x, y], [bottom x, y], inset]: the dark panel inside the left scale (from
  *             inset px inside the line to that chevron edge; mirrored right) and BMW's red glow by the needle. A layout with "mapLive": true and no widget
  *             toggled on mapUp opens and closes the window by u_hole alone, without a rebuild
+ *   lcp       effect layer; the whole Live Cockpit theme (shaders.js lcp, layout made by tools/gen_livecockpit.py): the mview
+ *             keys ("path", "scale", "dial", "dialAng", "line", "panel", "hole" ...; speed 0..MVIEW_SPEED, revs 0..MVIEW_RPM)
+ *             plus "lineR" [x0, x1, y] (the line under the gear, target px of the LEFT frame, mirrored), "tray" [x0, x1, y, r]
+ *             (BMW's check-control frame between the scales) and "bar" [offset, width, yTop, yBottom] (a bracket gauge along
+ *             each panel's upper chevron edge, offset px inside it: oil on the left, the gearbox on the right, both 50..150 C),
+ *             "bar2" [offset, width] (a second, outer one: coolant 50..150 C on the left, fuel consumption 0..LCP_CONS l/100 km
+ *             on the right);
+ *             the right corner dial is the hybrid battery (hvSoc) instead of oil
  *   vdash     effect layer; the whole Vector theme (shaders.js vdash, layout made by design/gen_vector.py): "tach" [cx, cy,
  *             inner r, outer r, start deg, sweep deg, segments] (revs 0..VDASH_RPM), "segs" (the bracket lines, at most
  *             20: [x0, y0, x1, y1, width, brightness 0..1]), "rings" (at most 4: {cx, cy, r, signal, min, max, color
@@ -339,6 +347,15 @@ const TILE_MAX = 14;       // half a flash: red, then the normal colour
 // widgets that show the shift cue (the reaction time is learned only while one of them is drawn)
 const MVIEW_RPM = 8000;            // the M view theme's rev scale: 0..8
 const MVIEW_SPEED = { us: 200, metric: 330 };
+// the Live Cockpit theme's bracket gauges: oil and gearbox 50..150 C; the gearbox counts as hot from GEAR_HOT C
+const LCP_TEMP = [50, 150], GEAR_HOT = 120, LCP_CONS = 30;
+// fuel consumption now (config.dme.fuelRate: litres an hour from the engine unit over read-only UDS / OBD, the first
+// candidate that answers): asked every FUEL_RATE_MS while shown; l/100 km = l/h / speed. The average is BMW's own trip
+// computer (KombiIF statusBordcomputerAverage); without it, this drive's from the fuel flow and the speed
+const FUEL_RATE_MS = 1000, FUEL_RATE_RETRY_MS = 60000, FUEL_RATE_STALE_MS = 4000, CONS_AVG_KM = 1;
+// gearbox oil temperature (config.dme.gearbox, the gearbox unit EGS 0x18 over read-only UDS): every GEAR_EVERY_MS while a
+// shown widget uses {{gearT}}; a car that doesn't answer is asked once a minute
+const GEAR_EVERY_MS = 2000, GEAR_RETRY_MS = 60000, GEAR_STALE_MS = 10000;
 const VDASH_RPM = 8000;            // the Vector theme's rev counter: 0..8
 const MEDIA_IF = 'de.bmw.infotainment.hmi.hmimediastate.HmiMediaState';   // the head unit's now playing (front)
 const MEDIA_TYPES = { 1: 'ARTIST', 2: 'ALBUM', 3: 'TITLE' };
@@ -526,6 +543,12 @@ class HudApp {
         this.intakeDme = null; this.intakeDmeAt = 0;  // C, intake air from the engine unit (config.dme.intake)
         this.needsIntake = false;        // a shown widget uses the intake temperature
         this.hvSoc = null; this.hvSocAt = 0;  // %, a plug-in hybrid's battery charge (HV_SOC)
+        this.gearT = null; this.gearTAt = 0;  // C, gearbox oil temperature (config.dme.gearbox)
+        this.needsGear = false;          // a shown widget uses the gearbox temperature
+        this.fuelRate = null; this.fuelRateAt = 0;   // l/h, the engine's fuel flow (config.dme.fuelRate)
+        this.consL = 0; this.consKm = 0;  // this drive: litres burnt and km driven while the fuel flow was known
+        this.bcAvg = null; this.bcAvgAt = 0; this.bcAvgSeen = false;   // l/100 km, BMW's trip computer average (KombiIF)
+        this.needsCons = false;          // a shown widget uses the consumption
         this.needsHv = false;            // a shown widget uses it
         this.fuelObd = null; this.fuelObdAt = 0;  // %, the fuel level from the engine unit (FUEL_OBD)
         this.needsFuel = false;          // a shown widget uses the fuel level
@@ -639,7 +662,9 @@ class HudApp {
         const j = JSON.stringify(shown) + ' ' + ids.join(' ');
         this.needsBoost = /boost/.test(j);
         this.needsIntake = /intake/.test(j);
-        this.needsHv = /hvSoc/.test(j);
+        this.needsHv = /hvSoc/.test(j) || shown.some((w) => w.type === 'lcp');
+        this.needsGear = /gearT/.test(j) || shown.some((w) => w.type === 'lcp' && w.bar);
+        this.needsCons = /\{\{cons/.test(j) || shown.some((w) => w.type === 'lcp' && w.bar2);
         this.needsFuel = /fuel/i.test(j);
     }
     /** A sensor's value now, as its slot shows it ('--' without one). */
@@ -736,6 +761,17 @@ class HudApp {
             'de.bmw.infrastructure.VehicleCondition': { VehicleCondition: (v) => this.vstate.feed(v) },
             // fuel and range (cauliflowermossgrape's live_data, MIT): litres (255 = none) and km (4095 = none)
             'de.bmw.infotainment.KombiIF': {
+                $pollMs: 10000,     // the trip computer's average: polled too, in case the car doesn't notify it
+                // BMW's own trip computer average (trip 1, what the cluster shows; Live Data's signals.js, MIT): 0.1 a step
+                // in the car's consumption unit, 65535 = none; kept as l/100 km
+                statusBordcomputerAverage: (v) => {
+                    const r = v && v.consumptionAverage1BC1, u = v && v.statusUnitOfMeasurementConsumptionBC;
+                    const x = isNum(r) && r < 65535 ? r / 10 : null;
+                    const to100 = { VERBRAUCH_IN_MPG_UK: 282.481, 2: 282.481, VERBRAUCH_IN_MPG_US: 235.215, 3: 235.215, VERBRAUCH_IN_KM_S_L: 100, 4: 100 }[u];
+                    this.bcAvg = x === null ? null : to100 ? (x > 0 ? to100 / x : null) : x;
+                    this.bcAvgAt = Date.now();
+                    if (!this.bcAvgSeen && isNum(this.bcAvg)) { this.bcAvgSeen = true; this.log.info('average consumption: ' + this.bcAvg.toFixed(1) + ' l/100 km from the trip computer (' + u + ')'); }
+                },
                 statusRangeTankStatus: (v) => {
                     const f = v && v.fluidLevelFuelTank, r = v && v.range;
                     this.fuelL = isNum(f) && f >= 0 && f < 255 ? f : null;
@@ -965,12 +1001,16 @@ class HudApp {
         const dme = this.config.dme;
         const hasBoost = !!(dme && Array.isArray(dme.boost) && dme.boost.length);
         const hasIntake = !!(dme && Array.isArray(dme.intake) && dme.intake.length);
-        let rd = null, busy = false, baro = 101.3, baroAt = 0, intakeAsk = 0, hvAsk = 0, hvMiss = 0, fuelAsk = 0, fuelMiss = 0;
+        const hasGear = !!(dme && Array.isArray(dme.gearbox) && dme.gearbox.length);
+        const hasRate = !!(dme && Array.isArray(dme.fuelRate) && dme.fuelRate.length);
+        let rateAsk = 0, rateMiss = 0;
+        let DidReader = null;
+        let rd = null, busy = false, baro = 101.3, baroAt = 0, intakeAsk = 0, hvAsk = 0, hvMiss = 0, fuelAsk = 0, fuelMiss = 0, gearAsk = 0, gearMiss = 0;
         try {
             // the kit's read-only link: anything but a read (22 / OBD 01) is refused before it leaves the head unit.
             // silentAfter Infinity: never skip a unit that stopped answering; the retry timers below pace that.
             const { ReadOnlyDiag } = require('./kit/readonly-diag');
-            const { DidReader } = require('./kit/dids');
+            DidReader = require('./kit/dids').DidReader;
             const link = new ReadOnlyDiag(this.ctx.signals, this.log, { silentAfter: Infinity });
             Promise.resolve().then(() => link.init()).catch((e) => this.log.info('engine unit link not available: ' + (e && e.message || e)));
             rd = new DidReader(link, { ecu: (dme && dme.ecu) || 18 });
@@ -981,7 +1021,9 @@ class HudApp {
             const wantIntake = hasIntake && this.needsIntake && now - intakeAsk >= 2000;   // a temperature: every 2 s is plenty
             const wantHv = this.needsHv && now - hvAsk >= (hvMiss >= 3 ? HV_RETRY_MS : HV_EVERY_MS);
             const wantFuel = this.needsFuel && now - fuelAsk >= (fuelMiss >= 3 ? FUEL_RETRY_MS : FUEL_EVERY_MS);
-            if (busy || this.car.data().demo || (!wantBoost && !wantIntake && !wantHv && !wantFuel)) return;
+            const wantGear = hasGear && this.needsGear && now - gearAsk >= (gearMiss >= 3 ? GEAR_RETRY_MS : GEAR_EVERY_MS);
+            const wantRate = hasRate && this.needsCons && now - rateAsk >= (rateMiss >= 3 ? FUEL_RATE_RETRY_MS : FUEL_RATE_MS);
+            if (busy || this.car.data().demo || (!wantBoost && !wantIntake && !wantHv && !wantFuel && !wantGear && !wantRate)) return;
             busy = true;
             (async () => {
                 if (wantFuel) {
@@ -1002,6 +1044,29 @@ class HudApp {
                         this.hvSoc = v; this.hvSocAt = Date.now(); hvMiss = 0;
                     } else if (++hvMiss === 3) {
                         this.log.info('hybrid battery: no answer from the battery unit (' + ((rd.raws[rd.key(HV_SOC)] || {}).why || '?') + '); asked once a minute');
+                    }
+                }
+                if (wantRate) {
+                    rateAsk = now;
+                    const r = await rd.value('fuelRate', dme.fuelRate);
+                    if (isNum(r)) {
+                        if (rateMiss >= 3 || !isNum(this.fuelRate)) this.log.info('fuel flow: ' + r.toFixed(2) + ' l/h from ' + DidReader.label(dme.fuelRate[rd.pick.fuelRate || 0]));
+                        this.fuelRate = r; this.fuelRateAt = Date.now(); rateMiss = 0;
+                    } else if (++rateMiss === 3) {
+                        this.log.info('fuel flow: no candidate answered (' + dme.fuelRate.map((c) => DidReader.label(c) + ' ' + ((rd.raws[rd.key(c)] || {}).why || '?')).join(', ') + '); asked once a minute');
+                    }
+                }
+                if (wantGear) {
+                    gearAsk = now;
+                    const t = await rd.value('gearbox', dme.gearbox);
+                    if (isNum(t)) {
+                        if (gearMiss >= 3 || !isNum(this.gearT)) {
+                            const c = dme.gearbox[rd.pick.gearbox || 0];
+                            this.log.info('gearbox oil: ' + t.toFixed(0) + ' C from ecu 0x' + (c.ecu == null ? (dme.ecu || 18) : c.ecu).toString(16) + ' ' + DidReader.label(c));
+                        }
+                        this.gearT = t; this.gearTAt = Date.now(); gearMiss = 0;
+                    } else if (++gearMiss === 3) {
+                        this.log.info('gearbox oil: no candidate answered (' + dme.gearbox.map((c) => DidReader.label(c) + ' ' + ((rd.raws[rd.key(c)] || {}).why || '?')).join(', ') + '); asked once a minute');
                     }
                 }
                 if (wantIntake) {
@@ -1640,6 +1705,21 @@ class HudApp {
             return this.car.data().demo ? 31 : null;
         }
         if (name === 'rpm' && isNum(this.rpmF)) return this.rpmF;
+        if (name === 'cons') {
+            // l/100 km now: the fuel flow over the speed; standing (under 3 km/h) with the engine burning reads full scale
+            if (this.car.data().demo) return 7.4;
+            const sp = this.car.data().speed;
+            if (!isNum(this.fuelRate) || Date.now() - this.fuelRateAt >= FUEL_RATE_STALE_MS || !isNum(sp)) return null;
+            if (this.fuelRate < 0.05) return 0;
+            return sp < 3 ? LCP_CONS : Math.min(99.9, this.fuelRate / sp * 100);
+        }
+        if (name === 'consAvg') {
+            if (this.car.data().demo) return 6.8;
+            // BMW's own trip computer average while the car sends one, else this drive's from the fuel flow
+            if (isNum(this.bcAvg) && Date.now() - this.bcAvgAt < 120000) return this.bcAvg;
+            return this.consKm >= CONS_AVG_KM ? this.consL / this.consKm * 100 : null;
+        }
+        if (name === 'gearT') return isNum(this.gearT) && Date.now() - this.gearTAt < GEAR_STALE_MS ? this.gearT : this.car.data().demo ? 78 : null;
         if (name === 'hvSoc') return isNum(this.hvSoc) && Date.now() - this.hvSocAt < HV_STALE_MS ? this.hvSoc : this.car.data().demo ? 64 : null;
         if (name === 'fuel' || name === 'range' || name === 'ambient') {
             // the kit's demo drive has none of these: made-up but steady values while it runs
@@ -1728,6 +1808,15 @@ class HudApp {
             case 'speed2': { const v = this._raw('speed'); return fix(isNum(v) ? (us ? v : v * 0.621371) : v, 0); }   // the other unit
             case 'u:speed2Lc': return us ? 'km/h' : 'mph';
             case 'u:speed2': return us ? 'KM/H' : 'MPH';
+            case 'cons': case 'consAvg': {
+                // l/100 km, or mpg (US) from it; 0 l/100 km (electric) reads 0 in both
+                const v = this._raw(tok);
+                if (!isNum(v)) return '--';
+                if (us) return v > 0 ? String(Math.min(999, Math.round(235.215 / v))) : '0';
+                return v.toFixed(1);
+            }
+            case 'u:cons': return us ? 'mpg' : 'l/100 km';
+            case 'gearT': { const v = this._raw('gearT'); return fix(isNum(v) ? (usT ? v * 9 / 5 + 32 : v) : v, 0); }
             case 'oil': case 'coolant': { const v = this._raw(tok); return fix(isNum(v) ? (usT ? v * 9 / 5 + 32 : v) : v, 0); }
             case 'boost': { const v = this._raw('boost'); return usP ? fix(isNum(v) ? v * 14.5038 : v, 1) : fix(v, 2); }
             case 'u:boost': return usP ? 'PSI' : 'BAR';
@@ -2165,7 +2254,7 @@ class HudApp {
             c.uniform(ref, 'u_strip', w.strip);
             c.uniform(ref, 'u_topEnd', [w.topEnd]);
             c.uniform(ref, 'u_road', w.road ? [w.road[0], w.road[1], 0, 1] : [0, 1, 0, 0]);
-        } else if (w.type === 'mview') {
+        } else if (w.type === 'mview' || w.type === 'lcp') {
             // the left scale's line: the points where its pieces meet (layer px), each piece straight or an arc ("arcs":
             // [centre x, y, radius, sweep radians], radius 0 = straight), and the arc length at each point (the shader
             // mirrors it for the right)
@@ -2193,7 +2282,14 @@ class HudApp {
             c.uniform(ref, 'u_ticks', us ? [10, 2, 8, 2] : [11, 3, 8, 2]);   // a mark every 10 mph / 10 km/h; every 500 rpm
             const [redFrom, orange] = this._redMarks(MVIEW_RPM);
             c.uniform(ref, 'u_redFrom', [redFrom]);
-            c.uniform(ref, 'u_orange', [orange]);
+            if (w.type === 'mview') c.uniform(ref, 'u_orange', [orange]);
+            if (w.type === 'lcp') {
+                const lr = w.lineR || [0, 0, 0], tr = w.tray, br = w.bar;
+                c.uniform(ref, 'u_lineR', [lr[0] - w.x, lr[1] - w.x, lr[2] - w.y, 0]);
+                c.uniform(ref, 'u_tray', tr ? [tr[0] - w.x, tr[1] - w.x, tr[2] - w.y, tr[3]] : [0, 0, 0, 0]);
+                c.uniform(ref, 'u_bar', br ? [br[0], br[1], br[2] - w.y, br[3] - w.y] : [0, 0, 0, 0]);
+                c.uniform(ref, 'u_bar2', w.bar2 ? [w.bar2[0], w.bar2[1]] : [0, 0]);
+            }
             c.uniform(ref, 'u_dial', [w.dial[0] - w.x, w.dial[1] - w.y, w.dial[2], 0]);
             c.uniform(ref, 'u_dialAng', w.dialAng);
             c.uniform(ref, 'u_line', [w.line[0] - w.x, w.line[1] - w.x, w.line[2] - w.y, w.line[3] - w.x]);
@@ -2577,7 +2673,13 @@ class HudApp {
     _trip(now) {
         const d = this.car.data(), dt = this.tripT ? Math.min(1000, now - this.tripT) : 0;
         this.tripT = now;
-        if (d.demo || !isNum(d.speed) || d.speed < 2) return;
+        if (d.demo || !isNum(d.speed)) return;
+        // the consumption average: litres and km only while the fuel flow is fresh (standing with the engine on counts)
+        if (isNum(this.fuelRate) && now - this.fuelRateAt < FUEL_RATE_STALE_MS) {
+            this.consL += this.fuelRate * dt / 3600000;
+            this.consKm += d.speed * dt / 3600000;
+        }
+        if (d.speed < 2) return;
         this.tripKm += d.speed * dt / 3600000;
         this.tripMs += dt;
     }
@@ -2818,6 +2920,27 @@ class HudApp {
             x.c.uniform(x.ref, 'u_rpm', [vals[1]]);
             x.c.uniform(x.ref, 'u_fuel', [vals[2]]);
             x.c.uniform(x.ref, 'u_oil', [vals[3]]);
+        } else if (w.type === 'lcp') {
+            const us = this.setting('units') === 'us';
+            const sp = this._raw('speed'), rpm = this._raw('rpm'), fuel = this._raw('fuel'), soc = this._raw('hvSoc');
+            const oil = this._raw('oil'), gt = this._raw('gearT'), cool = this._raw('coolant'), cons = this._raw('cons');
+            const limC = Number(this.setting('warnCoolant')) || 0;
+            const q = (v) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
+            const tq = (v) => (isNum(v) ? q((v - LCP_TEMP[0]) / (LCP_TEMP[1] - LCP_TEMP[0])) : -1);
+            const lim = Number(this.setting('warnOil')) || 0;
+            const vals = [q(isNum(sp) ? (us ? sp * 0.621371 : sp) / MVIEW_SPEED[us ? 'us' : 'metric'] : 0),
+                q(isNum(rpm) ? rpm / MVIEW_RPM : 0), q(isNum(fuel) ? fuel : 0), isNum(soc) ? q(soc / 100) : -1,
+                tq(oil), tq(gt), lim && isNum(oil) && oil > lim ? 1 : 0, isNum(gt) && gt > GEAR_HOT ? 1 : 0,
+                tq(cool), isNum(cons) ? q(cons / LCP_CONS) : -1, limC && isNum(cool) && cool > limC ? 1 : 0, 0];
+            const key = vals.join('|');
+            if (!force && key === x.last) return;
+            x.last = key;
+            x.c.uniform(x.ref, 'u_speed', [vals[0]]);
+            x.c.uniform(x.ref, 'u_rpm', [vals[1]]);
+            x.c.uniform(x.ref, 'u_fuel', [vals[2]]);
+            x.c.uniform(x.ref, 'u_soc', [vals[3]]);
+            x.c.uniform(x.ref, 'u_barV', vals.slice(4, 8));
+            x.c.uniform(x.ref, 'u_barV2', vals.slice(8, 12));
         } else if (w.type === 'mdash') {
             const vals = x.gauges.map(([u, G]) => {
                 const v = G.signal ? this._raw(G.signal) : null;

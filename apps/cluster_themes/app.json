@@ -1,8 +1,8 @@
 {
   "id": "cluster_themes",
   "title": "Cluster Themes",
-  "description": "Redraws the instrument cluster: GT3 race dash, M-style, M view, Vector (with a music panel), Sport, Minimal, Track, Drag, Rally, Retro 80s, Cruise, Dyno (BMW-coloured readout tiles) or Ribbon (with holiday editions), with shift lights, boost, temps, tyres, a G-meter and a 0-60 timer",
-  "version": "0.19.9",
+  "description": "Redraws the instrument cluster: GT3 race dash, M-style, M view, Live Cockpit (with hybrid battery, oil and gearbox gauges), Vector (with a music panel), Sport, Minimal, Track, Drag, Rally, Retro 80s, Cruise, Dyno (BMW-coloured readout tiles) or Ribbon (with holiday editions), with shift lights, boost, temps, tyres, a G-meter and a 0-60 timer",
+  "version": "0.19.10",
   "vendor": "custom",
   "loggingId": "OAC1",
   "autostart": true,
@@ -68,7 +68,8 @@
       ]
     },
     "de.bmw.infotainment.KombiIF": {
-      "statusRangeTankStatus": "rs"
+      "statusRangeTankStatus": "rs",
+      "statusBordcomputerAverage": "rs"
     },
     "de.bmw.infotainment.vehicle.Vehicle": {
       "statusNewCurrentUnitsStatusExt": "rs",
@@ -133,6 +134,10 @@
         [
           "mview",
           "M view"
+        ],
+        [
+          "livecockpit",
+          "Live Cockpit"
         ],
         [
           "vector",
@@ -213,6 +218,10 @@
           "M view"
         ],
         [
+          "livecockpit",
+          "Live Cockpit"
+        ],
+        [
           "vector",
           "Vector"
         ],
@@ -277,6 +286,10 @@
           "M view"
         ],
         [
+          "livecockpit",
+          "Live Cockpit"
+        ],
+        [
           "vector",
           "Vector"
         ],
@@ -339,6 +352,10 @@
         [
           "mview",
           "M view"
+        ],
+        [
+          "livecockpit",
+          "Live Cockpit"
         ],
         [
           "vector",
@@ -409,6 +426,10 @@
           "M view"
         ],
         [
+          "livecockpit",
+          "Live Cockpit"
+        ],
+        [
           "vector",
           "Vector"
         ],
@@ -475,6 +496,10 @@
         [
           "mview",
           "M view"
+        ],
+        [
+          "livecockpit",
+          "Live Cockpit"
         ],
         [
           "vector",
@@ -1357,7 +1382,7 @@
     },
     "_comment": "target panel: the whole 1920x720 instrument cluster, drawn over BMW's gauges. socketPath: cluster-render's documented default. utcOffsetMinutes: as in HUD Widgets (the clock box). tankLitres: the fuel gauge's full mark (the car sends litres, not the tank size; a G01 X3 holds 65). engine: the peak crank torque (Nm) and power (kW) the {{torquePct}} and {{powerPct}} tokens count from (an M40i: 500 Nm, 285 kW / 382 hp).",
     "dme": {
-      "comment": "Boost from the engine unit (DME, ecu 18) over read-only UDS 0x22, only while the sport display sends no boost and a boost readout is shown. Absolute kPa, the outside air pressure (baro) is subtracted. Candidates tried in order, the first plausible one wins. From cauliflowermossgrape's car_vitals (MIT). Intake air temperature the same way (config.dme.intake, every 2 s, only while an intake readout shows); candidates from cruzen991/Cluster's signal table (MIT), unverified on this car.",
+      "comment": "Boost from the engine unit (DME, ecu 18) over read-only UDS 0x22, only while the sport display sends no boost and a boost readout is shown. Absolute kPa, the outside air pressure (baro) is subtracted. Candidates tried in order, the first plausible one wins. From cauliflowermossgrape's car_vitals (MIT). Intake air temperature the same way (config.dme.intake, every 2 s, only while an intake readout shows); candidates from cruzen991/Cluster's signal table (MIT), unverified on this car. Gearbox oil temperature the same way (config.dme.gearbox, each candidate names its own unit), every 2 s while the Live Cockpit theme or a {{gearT}} readout shows; candidates unverified on the car, the log says which one answered. Fuel flow for the consumption (config.dme.fuelRate, l/h) every second while the Live Cockpit theme or a {{cons}} readout shows: the engine's own fuel rate if it gives one, else worked out from the air mass.",
       "ecu": 18,
       "boost": [
         {
@@ -1453,6 +1478,92 @@
           "min": -35,
           "max": 150,
           "note": "OBD service 01 PID 0x0F (same as F40F)"
+        }
+      ],
+      "gearbox": [
+        {
+          "ecu": 18,
+          "did": "4650",
+          "bytes": 1,
+          "at": 0,
+          "factor": 0.75,
+          "offset": -48,
+          "min": -40,
+          "max": 170,
+          "note": "DME8FF_R TEMP_GETRIEBE: gearbox temperature as the engine unit has it, raw x 0.75 - 48 C (B48 / B58 Bosch MG1 SGBD, via Live Data's catalog)"
+        },
+        {
+          "ecu": 24,
+          "did": "DA12",
+          "bytes": 1,
+          "at": 0,
+          "factor": 1,
+          "offset": -48,
+          "min": -40,
+          "max": 170,
+          "note": "gearbox unit (EGS 0x18): ATF temperature, raw - 48 C (community source, unverified)"
+        }
+      ],
+      "fuelRate": [
+        {
+          "did": "5656",
+          "bytes": 2,
+          "at": 0,
+          "factor": 0.004291524,
+          "offset": 0,
+          "min": 0,
+          "max": 120,
+          "note": "DME8FF_R VOLUM_STROM_KRAFTST_MLS_LOKAL: fuel volume flow, 0.00119209 ml/s a step (x 3.6 = l/h); from cauliflowermossgrape's Live Data catalog (MIT)"
+        },
+        {
+          "did": "4521",
+          "bytes": 2,
+          "at": 0,
+          "factor": 0.1342,
+          "offset": 0,
+          "min": 0,
+          "max": 120,
+          "note": "DME8FF_R MASSENSTROM_KRAFTSTOFF: fuel mass flow, 0.1 kg/h a step, / 0.745 kg/l"
+        },
+        {
+          "obd": "5E",
+          "bytes": 2,
+          "at": 0,
+          "factor": 0.05,
+          "offset": 0,
+          "min": 0,
+          "max": 120,
+          "note": "OBD service 01 PID 0x5E engine fuel rate, 0.05 l/h"
+        },
+        {
+          "did": "F45E",
+          "bytes": 2,
+          "at": 0,
+          "factor": 0.05,
+          "offset": 0,
+          "min": 0,
+          "max": 120,
+          "note": "the same as UDS 0x22 F45E"
+        },
+        {
+          "obd": "10",
+          "bytes": 2,
+          "at": 0,
+          "factor": 0.003287,
+          "offset": 0,
+          "min": 0,
+          "max": 120,
+          "note": "fallback: OBD PID 0x10 air mass (0.01 g/s) / (14.7 x 745 g/l) x 3600 = l/h at a stoichiometric mixture (reads low under full load enrichment)"
+        },
+        {
+          "did": "F410",
+          "bytes": 2,
+          "at": 0,
+          "factor": 0.003287,
+          "offset": 0,
+          "min": 0,
+          "max": 120,
+          "note": "the same air mass as UDS 0x22 F410"
         }
       ]
     },

@@ -30,6 +30,7 @@ const TYPES = {
     mdash: [],
     sdash: ['geo', 'k', 'band', 'ticks', 'fuelSeg', 'oilSeg', 'strip', 'topEnd'],
     mview: ['path', 'scale', 'dial', 'dialAng', 'line'],
+    lcp: ['path', 'scale', 'dial', 'dialAng', 'line', 'panel'],
     vdash: ['tach', 'segs'],
     mtach: ['side', 'y0', 'y8', 'ym', 'xm', 'kTop', 'kBot', 'wBot', 'wTop'],
     icon: ['icon'],
