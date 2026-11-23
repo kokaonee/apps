@@ -20,12 +20,12 @@ mv = json.load(open(os.path.join(LAYOUTS, 'mview.json')))
 base = mv['widgets'][0]
 
 # the scale's line, like BMW's M Performance view (M8 / Z4 M40i photos, Nov 23 2026): straight pieces with rounded
-# corners (110-180 px: soft transitions, the straight pieces still clear between them), the top running nearly level (3 degrees),
+# corners (200-260 px: one wide bend on the outer side instead of two, soft transitions; the straight pieces stay), the top running nearly level (3 degrees),
 # clear of the hood (visible.js HOOD). Corners: (x, y, corner radius), from the end by the middle (a short
 # raised piece, then a step down, as BMW's bottom line by the check-control area) round to the top end. Written as
 # points where straight pieces and arcs meet plus "arcs" [cx, cy, r, sweep] per piece, as the shader takes it.
-CORNERS = [(842, 619, 0), (776, 619, 16), (752, 636, 16), (340, 636, 130), (120, 455, 110), (110, 320, 120),
-           (250, 92, 180), (742, 64, 0)]
+CORNERS = [(842, 619, 0), (776, 619, 20), (752, 636, 20), (350, 636, 200), (100, 400, 250), (260, 92, 260),
+           (742, 64, 0)]
 START_X = CORNERS[0][0]
 
 
@@ -125,8 +125,8 @@ widgets = [{
     'path': new_path, 'arcs': new_arcs, 'scale': scale,
     'dial': base['dial'], 'dialAng': base['dialAng'],
     # the lines under the speed and under the gear at one height (M Performance view: both figures stand on them)
-    'line': [252, 700, 410, START_X],        # under the speed; no bottom line beyond the scale's own
-    'lineR': [252, 690, 410],                # under the gear (left frame, mirrored)
+    'line': [306, 700, 410, START_X],        # under the speed; no bottom line beyond the scale's own
+    'lineR': [306, 690, 410],                # under the gear (left frame, mirrored)
     'bar': BAR, 'bar2': BAR2,
     'panel': PANEL,
     # the map window: the whole middle between the panels' chevron edges, faded at the edges (BMW's own map view)
@@ -148,7 +148,8 @@ def numbers(prefix, labels, toggle=None, right=False):
         w = dict(id='%s%d' % (prefix, k), type='text', z=5, x=int(round(cx - 55)), y=int(round(cy - 13.5)), w=110, h=27,
                  text=t, font='s_scale', color='fg', align='center')
         if toggle: w['toggle'] = toggle
-        out.append(w)
+        if right: w['conn'] = 1      # the rev numbers on the second connection: the first keeps under 8 layers with
+        out.append(w)                # small sheets (else the planner packs big sheets, past the 16 MiB pixel memory)
     return out
 
 
@@ -187,7 +188,7 @@ widgets += [
     # the gear over the right line, the drive mode under it
     dict(id='gear', type='atext', z=5, x=1350 - 44, y=332, w=87, h=65, cells=1, text='{{gearnum}}', font='s_gear', chars='PRND0123456789-', color='fg', align='center', rate=1, hotWhen='now'),
     T('mode', 1230, 424, 300, 29, '{{mode}}', 's_label', 'dim', 'center'),
-    T('rpm_unit', 1170, 586, 220, 29, '1/min x 1000', 's_unit', 'dim', 'center'),
+    T('rpm_unit', 1170, 586, 220, 29, '1/min x 1000', 's_unit', 'dim', 'center', conn=1),
     T('scale_unit', 570, 586, 140, 29, '{{u:speedLc}}', 's_unit', 'dim', 'center'),
     T('badge', 810, 70, 300, 29, '{{badge}}', 's_unit', 'dim', 'center'),
 ]
@@ -249,6 +250,12 @@ widgets += [
     A('strip_time', 504, 678, 5, '{{time}}', 's_val', '0123456789:-', z=3, stripRow='l'),
     S('strip_ampm', 510, 676, 35, 29, '{{ampmLc}}', 's_unit', 'dim', 'left', 'l'),
 ]
+
+# connections (cluster-render draws 8 layers on each): the right half's text and icons on the second one, so that the
+# first keeps its sheets small (else the planner packs big sheets, past the 16 MiB pixel memory)
+for w in widgets:
+    if w['type'] in ('text', 'icon') and 'conn' not in w and not w.get('stripRow') and w['x'] + w['w'] / 2 > W / 2:
+        w['conn'] = 1
 
 layout = {
     'schemaVersion': 2,

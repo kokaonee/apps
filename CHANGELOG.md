@@ -4,6 +4,7 @@ Newest first. Dates are when the build was pushed.
 
 ## Nov 23 2026
 
+- **Cluster Themes 0.19.20:** Live Cockpit's outer side is one wide bend now (no second corner), with softer corners all round (200 to 260 px). The right half's text moved to a connection of its own, which keeps the theme at 10 MiB of cluster-render's 16 MiB pixel memory (0.19.19 was at its limit).
 - **Cluster Themes 0.19.19:** Live Cockpit's corners are softer still (110 to 180 px), the straight pieces and the nearly level tops stay.
 - **Cluster Themes 0.19.18:** Live Cockpit's outline a little rounder again (corners of 60 to 120 px), and the tops of the speed and rev scales run nearly level, as in BMW's M Performance view.
 - **Cluster Themes 0.19.17:** Live Cockpit takes the angular shape of BMW's M Performance view: straight scale lines with small rounded corners instead of M view's wide curves, the numbers set along them, the bottom lines stepping up towards the middle (no check-control frame), the speed and the gear both standing on their lines, and the rev limit as yellow, orange and red dashes outside the line.
