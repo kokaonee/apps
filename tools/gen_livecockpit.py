@@ -32,6 +32,40 @@ SHAPE = [(842, 619, 0), (776, 619, 16), (752, 636, 16), (340, 636, 130), (120, 4
 RADII = [0, 20, 20, 210, 170, 180, 280, 0]
 KEEP_Y = {1, 2, 3}       # the corners of the bottom lines stay at their height (level lines)
 
+# The two diagonal sides (30-120 and 150-210 km/h; the rev scale is the mirror) bow outwards a little (user, Nov 23
+# 2026): a corner in each side's middle, BOW px out, with a wide fillet over the middle part of the side. The shader
+# takes 16 points: the two small corners of the step by the middle go sharp (radius 0) to make room.
+BOW = 7
+
+
+def _tangent(prev, b, nxt, r):
+    """How far a corner's fillet reaches along its sides."""
+    if r <= 0: return 0
+    u = _unit(prev[0] - b[0], prev[1] - b[1]); v = _unit(nxt[0] - b[0], nxt[1] - b[1])
+    ang = math.acos(max(-1, min(1, u[0] * v[0] + u[1] * v[1])))
+    return r / math.tan(ang / 2)
+
+
+def bowed(corners):
+    """The solved corners with a gentle outward bow in the middle of the two diagonal sides (after (x, 636) and after
+    the outer bend's upper corner); its fillet spans 70 % of the straight part the side's end fillets leave free."""
+    c = [list(x) for x in corners]
+    c[1][2] = c[2][2] = 0
+    for a in (5, 3):
+        p0, p1 = c[a], c[a + 1]
+        L = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+        t0, t1 = _tangent(c[a - 1], p0, p1, p0[2]), _tangent(p0, p1, c[a + 2], p1[2])
+        s = (t0 + L - t1) / 2                                      # the middle of the straight part left between
+        free = (L - t1 - t0) / 2
+        nx, ny = (p1[1] - p0[1]) / L, -(p1[0] - p0[0]) / L         # outwards
+        mid = (p0[0] + (p1[0] - p0[0]) * s / L + nx * BOW, p0[1] + (p1[1] - p0[1]) * s / L + ny * BOW)
+        half = (math.atan2(BOW, s) + math.atan2(BOW, L - s)) / 2   # half the bend at the bow, roughly
+        r = round(0.7 * free / math.tan(half))
+        c.insert(a + 1, [round(mid[0], 2), round(mid[1], 2), r])
+    return [tuple(x) for x in c]
+
+
+
 
 def _unit(x, y):
     l = math.hypot(x, y); return (x / l, y / l)
@@ -48,10 +82,11 @@ def _apex(prev, b, nxt, r):
 
 def solve_corners(shape, radii, rounds=40):
     pts = [list(c[:2]) for c in shape]
-    want = [None] + [_apex(shape[i - 1], shape[i], shape[i + 1], shape[i][2])[0] for i in range(1, len(shape) - 1)] + [None]
+    want = [None] + [_apex(shape[i - 1], shape[i], shape[i + 1], shape[i][2])[0] if shape[i][2] < 1000 else None
+                     for i in range(1, len(shape) - 1)] + [None]
     for _ in range(rounds):
         for i in range(1, len(pts) - 1):
-            if radii[i] <= 0: continue
+            if radii[i] <= 0 or shape[i][2] >= 1000: continue      # sharp, or a side's gentle bow: stays put
             a, bis = _apex(pts[i - 1], pts[i], pts[i + 1], radii[i])
             ex, ey = want[i][0] - a[0], want[i][1] - a[1]
             k = ex * bis[0] + ey * bis[1]                     # the error along the bisector
@@ -62,7 +97,7 @@ def solve_corners(shape, radii, rounds=40):
     return [(round(p[0], 2), round(p[1], 2), r) for p, r in zip(pts, radii)]
 
 
-CORNERS = solve_corners(SHAPE, RADII)
+CORNERS = bowed(solve_corners(SHAPE, RADII))
 START_X = CORNERS[0][0]
 
 

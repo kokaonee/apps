@@ -4,6 +4,7 @@ Newest first. Dates are when the build was pushed.
 
 ## Nov 23 2026
 
+- **Cluster Themes 0.19.22:** Live Cockpit's two slanted sides (30 to 120 and 150 to 210 km/h, and their mirror on the rev scale) bow out a little instead of running dead straight. The small step of the bottom lines by the middle has sharp corners now (the line has room for 16 points).
 - **Cluster Themes 0.19.21:** Live Cockpit's outline is 0.19.19's again, with softer corners (170 to 280 px) that keep its outer edges where they were: each corner point moves outwards so the wider curve still reaches the old one's outermost point, instead of cutting the corner towards the middle as 0.19.20 did.
 - **Cluster Themes 0.19.20:** Live Cockpit's outer side is one wide bend now (no second corner), with softer corners all round (200 to 260 px). The right half's text moved to a connection of its own, which keeps the theme at 10 MiB of cluster-render's 16 MiB pixel memory (0.19.19 was at its limit).
 - **Cluster Themes 0.19.19:** Live Cockpit's corners are softer still (110 to 180 px), the straight pieces and the nearly level tops stay.
