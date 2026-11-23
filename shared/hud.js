@@ -120,7 +120,8 @@
  *             across its width ("w" / cells wide each; the glyphs keep their shape when w = cells x the font's
  *             widest advance and h = its cell height, logged at creation), and a new value is one uniform
  *             message of glyph codes. "text" tokens as text, "font", "color" role, "align" left | right | center,
- *             "rate" ms (TEXT_MS), "hotWhen" as on text. Up to 32 cells; only the characters the font has.
+ *             "rate" ms (TEXT_MS), "hotWhen", warning flash and temperature bands as on text, "chars" (only these
+ *             characters in the atlas: tighter cells). Up to 32 cells; only the characters the font has (ASCII).
  *   meter     effect layer (shaders.js meter): a segmented bar, "signal" between "min" and "max" (raw units: km/h, C,
  *             bar, rpm), "segments" (20), "gap" px (4), "vertical": true fills upward; "colors" [3 roles] lit below
  *             "at"[0] / up to "at"[1] / past it (fractions of the bar), "trackColor" (track); "peak": ms (true = 3 s)
@@ -1109,11 +1110,12 @@ class HudApp {
      * rows), made on first use and kept while the connection lives (the client re-sends it by itself after a
      * reconnect). A widget's effect layer samples it; nothing is drawn by the asset itself.
      */
-    _atlas(fontName, ci) {
-        const key = ci + ':' + fontName;
+    _atlas(fontName, ci, only) {
+        // "only": just these characters (an atext widget's "chars", e.g. digits): tighter cells, a smaller asset
+        const key = ci + ':' + fontName + (only ? ':' + only : '');
         if (this.atlases.has(key)) return this.atlases.get(key);
         const font = textRaster.loadFont(fontName), glyphs = font.metrics.glyphs;
-        const chars = Object.keys(glyphs).filter((ch) => ch.length === 1 && ch >= ' ' && ch <= '~').sort().slice(0, 64);
+        const chars = Object.keys(glyphs).filter((ch) => ch.length === 1 && ch >= ' ' && ch <= '~' && (!only || only.indexOf(ch) >= 0 || ch === ' ')).sort().slice(0, 64);
         if (!chars.length) throw new Error('font "' + fontName + '" has no printable glyphs for an atlas');
         const cellW = Math.max(1, Math.ceil(Math.max.apply(null, chars.map((ch) => glyphs[ch].advance)))) + 2;
         const cellH = font.metrics.cellHeight;
@@ -2220,7 +2222,7 @@ class HudApp {
         this.widgets.set(w.id, x);
         const t = this.theme;
         if (w.type === 'atext') {
-            const a = this._atlas(w.font, x.ci);
+            const a = this._atlas(w.font, x.ci, w.chars);
             x.atlas = a;
             x.cells = Math.max(1, Math.min(32, isNum(w.cells) ? Math.floor(w.cells) : Math.floor(w.w / a.cellW)));
             c.bind(ref, 'u_font', a.ref);
@@ -2706,9 +2708,13 @@ class HudApp {
         if (w.type === 'atext') {
             if (!force && now - x.lastPaint < (w.rate || TEXT_MS)) return;
             const s = this._resolve(w.text);
-            // "hotWhen" as on text: the shift red while the shift light says so (one colour uniform, sent on change)
-            const role = w.hotWhen && this._shift()[w.hotWhen] ? 'hot' : w.color || 'fg';
-            if (force || role !== x.role) { x.role = role; x.c.uniform(x.ref, 'u_color', rgba(color(this.theme, role))); }
+            // colour as on text (one colour uniform, sent on change): "hotWhen" the shift red while the shift light says
+            // so, the temperature bands (smart temps), over a warning limit the red flash
+            let role = w.hotWhen && this._shift()[w.hotWhen] ? 'hot' : w.color || 'fg';
+            role = smartTemps.role(this, w, role);
+            if (w.warnFlash !== false && this._warning(w) && Math.floor(now / WARN_FLASH_MS) % 2 === 0) role = 'hot';
+            const rk = String(role);
+            if (force || rk !== x.role) { x.role = rk; x.c.uniform(x.ref, 'u_color', rgba(color(this.theme, role))); }
             if (!force && s === x.last) return;
             x.last = s; x.lastPaint = now;
             x.c.uniform(x.ref, 'u_text', this._atlasCodes(x, s), { type: 'vec4' });
