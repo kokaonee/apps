@@ -598,17 +598,18 @@
     },
     {
       "id": "speed",
-      "type": "text",
+      "type": "atext",
       "z": 5,
-      "x": 296,
+      "x": 380,
       "y": 350,
-      "w": 330,
+      "w": 246,
       "h": 68,
+      "cells": 3,
       "text": "{{speed}}",
       "font": "s_speed",
       "color": "fg",
       "align": "right",
-      "rate": 100
+      "rate": 50
     },
     {
       "id": "speed_unit",
@@ -625,18 +626,19 @@
     },
     {
       "id": "gear",
-      "type": "text",
+      "type": "atext",
       "z": 5,
-      "x": 1220,
+      "x": 1298,
       "y": 332,
-      "w": 260,
+      "w": 104,
       "h": 65,
+      "cells": 1,
       "text": "{{gearnum}}",
       "font": "s_gear",
       "color": "fg",
       "align": "center",
-      "hotWhen": "now",
-      "rate": 100
+      "rate": 50,
+      "hotWhen": "now"
     },
     {
       "id": "mode",

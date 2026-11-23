@@ -119,8 +119,8 @@
  *             pixel, not a layer, shared by every atext widget on that font); the widget is "cells" equal cells
  *             across its width ("w" / cells wide each; the glyphs keep their shape when w = cells x the font's
  *             widest advance and h = its cell height, logged at creation), and a new value is one uniform
- *             message of glyph codes. "text" tokens as text, "font", "color" role, "align" left | right | center.
- *             Up to 32 cells; only the characters the font has.
+ *             message of glyph codes. "text" tokens as text, "font", "color" role, "align" left | right | center,
+ *             "rate" ms (TEXT_MS), "hotWhen" as on text. Up to 32 cells; only the characters the font has.
  *   meter     effect layer (shaders.js meter): a segmented bar, "signal" between "min" and "max" (raw units: km/h, C,
  *             bar, rpm), "segments" (20), "gap" px (4), "vertical": true fills upward; "colors" [3 roles] lit below
  *             "at"[0] / up to "at"[1] / past it (fractions of the bar), "trackColor" (track); "peak": ms (true = 3 s)
@@ -2706,6 +2706,9 @@ class HudApp {
         if (w.type === 'atext') {
             if (!force && now - x.lastPaint < (w.rate || TEXT_MS)) return;
             const s = this._resolve(w.text);
+            // "hotWhen" as on text: the shift red while the shift light says so (one colour uniform, sent on change)
+            const role = w.hotWhen && this._shift()[w.hotWhen] ? 'hot' : w.color || 'fg';
+            if (force || role !== x.role) { x.role = role; x.c.uniform(x.ref, 'u_color', rgba(color(this.theme, role))); }
             if (!force && s === x.last) return;
             x.last = s; x.lastPaint = now;
             x.c.uniform(x.ref, 'u_text', this._atlasCodes(x, s), { type: 'vec4' });

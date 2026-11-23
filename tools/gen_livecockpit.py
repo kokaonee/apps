@@ -76,11 +76,13 @@ T = lambda id, x, y, w, h, text, font, color='fg', align='left', **k: dict(id=id
 
 widgets += [
     # the speed under the line, the unit beside it (BMW's standard view)
-    # speed and gear re-draw up to 10 times a second (other text 5): they change the most while driving
-    T('speed', 296, 350, 330, 68, '{{speed}}', 's_speed', align='right', rate=100),
+    # speed and gear drawn by the GPU from a glyph atlas (atext): a new value is one uniform message like the needles,
+    # no pixel upload, so they keep up with the needles (CPU text lagged on the car). Cells: the font's widest advance
+    # + 2 (s_speed 82 x 68, s_gear 104 x 65), right edge / centre where the text widgets had them
+    dict(id='speed', type='atext', z=5, x=626 - 3 * 82, y=350, w=3 * 82, h=68, cells=3, text='{{speed}}', font='s_speed', color='fg', align='right', rate=50),
     T('speed_unit', 634, 352, 100, 29, '{{u:speedLc}}', 's_unit', 'dim'),
     # the gear over the right line, the drive mode under it
-    T('gear', 1220, 332, 260, 65, '{{gearnum}}', 's_gear', align='center', hotWhen='now', rate=100),
+    dict(id='gear', type='atext', z=5, x=1350 - 52, y=332, w=104, h=65, cells=1, text='{{gearnum}}', font='s_gear', color='fg', align='center', rate=50, hotWhen='now'),
     T('mode', 1230, 424, 300, 29, '{{mode}}', 's_label', 'dim', 'center'),
     T('rpm_unit', 1220, 586, 220, 29, '1/min x 1000', 's_unit', 'dim', 'center'),
     T('scale_unit', 520, 586, 140, 29, '{{u:speedLc}}', 's_unit', 'dim', 'center'),
