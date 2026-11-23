@@ -21,6 +21,14 @@
  * Never sent: "cluster" (would turn the map off), "guide" (saved by the tool). Never touched: patch.sock (root).
  * Facts from the waze-on-cluster 0.9.3 source (main.cpp, control.cpp, map_feed.cpp, the .socket unit), read
  * Nov 7 2026. Plain Node 8 (the car's 8.16.2).
+ *
+ * Host mode (Nov 23 2026): waze-on-cluster 0.14.5 and later have no "start" command any more (an unknown command is
+ * logged and not answered, so the old way waited for ever: "Moving the map into the theme"). A theme now hosts the
+ * map from its own layers through cluster-render (after 0.8.1, hello host_layers 1): hud.js sends `host` into the
+ * panel with the window's rect, and waze-on-cluster, following the `host` event, draws its map there under our
+ * layers and says "hosted": 1 in its status. hostMode(true) turns the control socket off; setHost() gets the
+ * `hosting` event's state; "up" is then: wanted, our host live, the map showing and hosted. Facts from the
+ * waze-on-cluster 0.14.9 and cluster-render 0.8.3 sources (main.cpp, map_feed.cpp, PROTOCOL.md), read Nov 23 2026.
  */
 const fs = require('fs');
 const net = require('net');
@@ -54,6 +62,25 @@ class Waze {
         this.moved = false;          // we put it on the panel (so we put it back)
         try { this.moved = JSON.parse(fs.readFileSync(this.memo, 'utf8')).moved === true; } catch (e) { /* first run */ }
         this.lastText = null;
+        this.hosting = false;        // host mode: cluster-render takes a host from layers (no control socket)
+        this.hostLive = false;       // host mode: our host is live (cluster-render's hosting event)
+        this.hostWhy = '';           // host mode: why it isn't
+    }
+
+    /** Host mode on or off (hud.js, from cluster-render's hello). */
+    hostMode(on) {
+        if (on === this.hosting) return;
+        this.hosting = on;
+        this.log.info('waze: ' + (on ? 'the theme hosts the map through cluster-render' : 'the map moved with waze-on-cluster\'s control socket'));
+        this._update(this.st);
+    }
+
+    /** Host mode: our host's state from cluster-render's hosting event. */
+    setHost(live, why) {
+        if (live === this.hostLive && (why || '') === this.hostWhy) return;
+        this.hostLive = live; this.hostWhy = why || '';
+        this.log.info('waze: host ' + (live ? 'live' : 'waiting' + (why ? ' (' + why + ')' : '')));
+        this._update(this.st);
     }
 
     start() {
@@ -83,6 +110,14 @@ class Waze {
         if (s.state === 'unsupported') return { text: 'Waze on Cluster: this car isn\'t supported', up: false, ok: false };
         if (s.state === 'off') return { text: 'Waze map is turned off in the Waze app', up: false, ok: false };
         if (!this.wanted) return { text: 'Off. Waze shows the map in BMW\'s own map view', up: false, ok: true };
+        if (this.hosting) {
+            if (!this.hostLive) return { text: 'Waiting for cluster-render' + (this.hostWhy ? ' (' + this.hostWhy + ')' : ''), up: false, ok: false };
+            if (s.state === 'showing' && s.hosted) return { text: 'Map showing in the theme', up: true, ok: true };
+            if (s.state === 'showing') return { text: 'Waze on Cluster hasn\'t moved the map yet (update Waze on Cluster)', up: false, ok: false };
+            if (s.state === 'frozen') return { text: 'Map frozen, waiting for the phone', up: false, ok: false };
+            if (s.state === 'error') return { text: 'Waze on Cluster reports an error', up: false, ok: false };
+            return { text: 'Waiting for the map (open Waze on the phone)', up: false, ok: true };
+        }
         if (s.target !== 'panel') {
             if (this.problem === 'busy') return { text: 'Waze app is open, retrying', up: false, ok: false };
             if (this.problem) return { text: 'Can\'t reach Waze on Cluster (' + this.problem + ')', up: false, ok: false };
@@ -99,7 +134,7 @@ class Waze {
             if (err || Date.now() - st.mtime.getTime() > STALE_MS) return this._update(null);
             fs.readFile(this.statusPath, 'utf8', (e, txt) => {
                 let s = null;
-                try { if (!e) { const j = JSON.parse(txt); s = { state: String(j.state || ''), target: j.target == null ? null : String(j.target) }; } } catch (x) { s = null; }
+                try { if (!e) { const j = JSON.parse(txt); s = { state: String(j.state || ''), target: j.target == null ? null : String(j.target), hosted: j.hosted === 1 }; } } catch (x) { s = null; }
                 this._update(s);
             });
         });
@@ -109,7 +144,8 @@ class Waze {
         this.st = s;
         if (s && s.target === 'map' && !this.wanted && this.moved) this._setMoved(false);   // it's back
         if (s && s.target === 'panel' && this.problem) this.problem = null;
-        const up = !!(this.wanted && s && s.target === 'panel' && s.state === 'showing');
+        const up = this.hosting ? !!(this.wanted && s && this.hostLive && s.hosted && s.state === 'showing')
+            : !!(this.wanted && s && s.target === 'panel' && s.state === 'showing');
         const text = this.info().text;
         const changed = up !== this.up || text !== this.lastText;
         this.up = up;
@@ -121,6 +157,12 @@ class Waze {
     _sync() {
         const s = this.st;
         if (this.sending || Date.now() < this.nextTry || !s) return;
+        if (this.hosting) {
+            // an old move of ours (before host mode): put it back once, else nothing to send
+            if (this.moved && s.target === 'panel') this._send('map');
+            else if (this.moved) this._setMoved(false);
+            return;
+        }
         if (s.state === 'unsupported' || s.state === 'off') return;
         if (this.wanted && s.target !== 'panel') this._send('panel');
         else if (!this.wanted && this.moved && s.target === 'panel') this._send('map');

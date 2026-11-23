@@ -123,6 +123,8 @@ class ClusterRender extends EventEmitter {
         this.inbuf = Buffer.alloc(0);
         this.backend = '';
         this.targets = '';
+        this.hostLayers = false;     /* the service takes a host from layers (hello host_layers 1) */
+        this.layerHosts = new Map(); /* hosted target -> { into, msg }, sent again after each hello */
     }
 
     connect() {
@@ -208,8 +210,11 @@ class ClusterRender extends EventEmitter {
         if (ev.ev === 'hello') {
             this.backend = ev.backend;
             this.targets = ev.targets;
+            this.hostLayers = ev.host_layers === 1;
             this.ready = true;
             this.backoff = 0;
+            /* after the layers, which went at connect */
+            if (this.hostLayers) this.layerHosts.forEach((h) => this._send(h.msg));
             this._pump();
             this.emit('ready');
         } else if (ev.ev === 'layer') {
@@ -219,9 +224,16 @@ class ClusterRender extends EventEmitter {
         } else if (ev.ev === 'budget') {
             this.emit('budget', ev.cap_kb_per_s, ev.max_kb_per_s, ev.reason);
         } else if (ev.ev === 'error') {
+            /* a host from layers refused: the service ended it; forgotten unless one into another target was sent since */
+            const lh = ev.op === 'host' && 'into' in ev ? this.layerHosts.get(ev.target) : null;
+            if (lh && lh.into === ev.into) this.layerHosts.delete(ev.target);
             this.emit('refused', ev.op, ev.ref, ev.reason);
         } else if (ev.ev === 'status') {
             this.emit('status', ev.text);
+        } else if (ev.ev === 'hosting') {
+            this.emit('hosting', ev.target, ev);   /* this app's host from layers: ev.state live or waiting, ev.reason */
+        } else if (ev.ev === 'host') {
+            this.emit('host', ev.target, ev);      /* ev.into empty: not hosted any more */
         }
     }
 
@@ -532,6 +544,27 @@ class ClusterRender extends EventEmitter {
     }
 
     status() { this._send({ op: 'status' }); }
+
+    /* This app's layers on `into` host opts.target (PROTOCOL.md "Hosting from layers", cluster-render after 0.8.1): the
+     * hosted video (waze-on-cluster's map) is drawn under them in opts x, y, w, h (in `into`'s pixels), showing the
+     * part src_x, src_y, src_w, src_h of the target (all four, else all of it); shown false: nowhere. Kept by target
+     * and sent to a service whose hello has host_layers 1, now or after the next hello, until unhost() or a refusal.
+     * Ported from robertnisipeanu's cluster-render JS client. */
+    host(into, opts) {
+        if (!into || !opts.target || opts.target === into) return false;
+        const m = { op: 'host', into, target: opts.target, x: opts.x, y: opts.y, w: opts.w, h: opts.h, shown: flag(opts.shown !== false) };
+        if (opts.src_w && opts.src_h) { m.src_x = opts.src_x || 0; m.src_y = opts.src_y || 0; m.src_w = opts.src_w; m.src_h = opts.src_h; }
+        this.layerHosts.set(opts.target, { into, msg: m });
+        if (this.ready && this.hostLayers) this._send(m);
+        return true;
+    }
+
+    /* Sent also with nothing kept here: the service ends whatever this app hosts of target. */
+    unhost(target) {
+        const h = this.layerHosts.get(target);
+        this.layerHosts.delete(target);
+        if (this.ready && this.hostLayers) this._send({ op: 'unhost', into: h ? h.into : '', target });
+    }
 }
 
 module.exports = { ClusterRender, DEFAULT_PATH };

@@ -598,6 +598,7 @@ class HudApp {
             if (this.mapLayout && this.setting('mapUp') !== this.mapShown) { if (this.mapLive) this._mapLive(); else this._rebuild(); } else this._status();
         })) : null;
         this.mapShown = false;           // "mapUp" when the layout was built (or last opened / closed, mapLive)
+        this.mapHostKey = null; this.mapHostClient = null;   // the Waze map hosted from our layers (_mapHost)
         this.mapLive = false;            // the active layout opens and closes its map window without a rebuild
         // the screen shared with the other app (screen.js): stepping aside while the driver gave it to the other one
         this.screen = new Screen(this.target === 'panel' ? 'cluster' : 'hud', ctx.dataDir, this.log,
@@ -898,7 +899,16 @@ class HudApp {
 
     _wireClientEvents(c, ci) {
         const tag = ci ? ' [connection ' + (ci + 1) + ']' : '';
-        c.on('ready', () => { this.log.info('cluster-render ready' + tag + ' (backend=' + c.backend + ')'); if (ci === 0) this._rebuild(); else this._status(); });
+        c.on('ready', () => {
+            this.log.info('cluster-render ready' + tag + ' (backend=' + c.backend + (c.hostLayers ? ', hosts from layers' : '') + ')');
+            // a cluster-render that hosts from layers: the Waze map comes into the theme by our host, not Waze's socket
+            if (ci === 0 && this.waze) this.waze.hostMode(c.hostLayers);
+            if (ci === 0) this._rebuild(); else { this._status(); this._mapHost(); }
+        });
+        c.on('hosting', (target, ev) => {
+            if (target !== 'map' || !this.waze) return;
+            this.waze.setHost(ev.state === 'live', ev.reason + (ev.by ? ' by ' + ev.by : ''));
+        });
         c.on('disconnected', () => { this.log.warn('cluster-render disconnected' + tag + ', client will retry'); this._status(); });
         c.on('layer', (ref, state, reason) => {
             const key = ci + ':' + ref;
@@ -995,6 +1005,38 @@ class HudApp {
     /** Waze's map on the panel only while the setting is on and the theme shown has a map window. */
     _wazeWant() {
         if (this.waze) this.waze.want(this.started && this.setting('mapInTheme') === true && this.mapLayout);
+        this._mapHost();
+    }
+
+    /**
+     * The Waze map hosted from our layers (cluster-render after 0.8.1, waze-on-cluster 0.14.5 on; waze.js "Host mode"):
+     * while wanted, `host` into our target with the map window's rect (the layout's widget with holeWhen "mapUp"),
+     * showing the middle of the map cut to the window's shape; else `unhost`. The client keeps it over reconnects.
+     * The window itself still opens on mapUp (u_hole), once waze-on-cluster says the map is hosted and showing.
+     */
+    _mapHost() {
+        const w = this.mapLayout && (this.shown || []).find((x) => x.holeWhen === 'mapUp' && x.hole);
+        const c = w ? this.clients[this._connOf(w)] : this.mapHostClient;
+        const want = !!(w && c && this.waze && this.waze.wanted && c.hostLayers);
+        let key = null, opts = null;
+        if (want) {
+            const inset = isNum(w.holeInset) ? w.holeInset : 6, h = w.hole;
+            const r = { x: Math.round(h[0] + inset), y: Math.round(h[1] + inset), w: Math.round(h[2] - 2 * inset), h: Math.round(h[3] - 2 * inset) };
+            const m = /(?:^|,)map:(\d+)x(\d+)/.exec(c.targets || '');
+            const mw = m ? +m[1] : 1088, mh = m ? +m[2] : 480;
+            // the map's middle, cut to the window's aspect (stretching the whole map would squash it)
+            let sw = mw, sh = Math.round(mw * r.h / r.w);
+            if (sh > mh) { sh = mh; sw = Math.round(mh * r.w / r.h); }
+            opts = Object.assign({ target: 'map', shown: true, src_x: Math.round((mw - sw) / 2), src_y: Math.round((mh - sh) / 2), src_w: sw, src_h: sh }, r);
+            key = JSON.stringify(opts) + '@' + this.clients.indexOf(c);
+        }
+        if (key === this.mapHostKey) return;
+        if (this.mapHostClient && (!want || this.mapHostClient !== c)) this.mapHostClient.unhost('map');
+        this.mapHostKey = key; this.mapHostClient = want ? c : null;
+        if (want) {
+            c.host(this.target, opts);
+            this.log.info('waze: hosting the map at ' + opts.x + ',' + opts.y + ' ' + opts.w + 'x' + opts.h + ' (its ' + opts.src_w + 'x' + opts.src_h + ' at ' + opts.src_x + ',' + opts.src_y + ')');
+        } else if (key === null && this.waze) this.waze.setHost(false, '');
     }
 
     /** Boost, intake, fuel % and hybrid battery from the car's units (config.dme), over the read-only link. */
@@ -2029,6 +2071,7 @@ class HudApp {
             .map((w) => (w.stripRow ? Object.assign({}, w) : w));
         this.shown = shown;              // for a scale to find its rev bar (driver camera wings)
         this._setNeeds(shown);
+        this._mapHost();                 // the map window's rect is known now
         // plan the layers first (a sheet's size is only known once every member is placed), then make them
         // in that order: within a class and z, cluster-render puts the newer layer on top. Small sheets
         // first; a bigger limit only when the layer budget needs it (see the header).

@@ -204,7 +204,9 @@ const renderServer = net.createServer((sock) => {
             st.app = m.app || '?';
             if (m.proto !== 1) bad('hello proto ' + m.proto + ', service speaks 1');
             log('info', 'renderer: hello from ' + st.app + ' (proto ' + m.proto + ')');
-            writeEv(sock, { ev: 'hello', backend: 'bench', targets: Object.keys(TARGETS).join(',') });
+            // BENCH_HOST_LAYERS=1: a cluster-render after 0.8.1 (hosts from layers: the Waze map inside a theme)
+            writeEv(sock, Object.assign({ ev: 'hello', backend: 'bench', targets: Object.keys(TARGETS).map((k) => k + ':' + TARGETS[k].join('x')).join(',') },
+                process.env.BENCH_HOST_LAYERS === '1' ? { host_layers: 1 } : {}));
             return;
         }
         if (!st.hello) return bad(m.op + ' before hello');
@@ -333,6 +335,13 @@ const renderServer = net.createServer((sock) => {
                 const conns = new Set(Array.from(layers.values()).map((l) => l.conn)).size;
                 const assets = layers.size - layerCount();
                 writeEv(sock, { ev: 'status', text: 'bench: ' + layerCount() + ' layers' + (assets ? ' and ' + assets + ' asset' + (assets > 1 ? 's' : '') : '') + ' on ' + conns + ' connection(s), layer cap ' + (layerCap || 'off') + ', ' + overCap() + ' over it, pixel memory ' + mib(pixelBytes()) + ' of ' + (PIXEL_BYTES ? mib(PIXEL_BYTES) : 'unlimited') });
+                return;
+            case 'host':
+            case 'unhost':
+                // logged and taken as live: the bench draws no map (fake-waze.js's status says what Waze would)
+                if (process.env.BENCH_HOST_LAYERS !== '1') return bad('op "' + m.op + '" needs BENCH_HOST_LAYERS=1');
+                log('info', 'renderer: ' + st.app + ' ' + m.op + ' ' + m.target + (m.op === 'host' ? ' into ' + m.into + ' at ' + m.x + ',' + m.y + ' ' + m.w + 'x' + m.h + (m.src_w ? ' (part ' + m.src_w + 'x' + m.src_h + ' at ' + m.src_x + ',' + m.src_y + ')' : '') : ''));
+                if (m.op === 'host') writeEv(sock, { ev: 'hosting', target: m.target, into: m.into, state: m.shown ? 'live' : 'waiting', reason: m.shown ? '' : 'it shows the target nowhere (shown 0)', by: '' });
                 return;
             default:
                 bad('op "' + m.op + '" not handled by the bench');
