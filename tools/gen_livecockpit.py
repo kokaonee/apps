@@ -19,12 +19,13 @@ W = 1920
 mv = json.load(open(os.path.join(LAYOUTS, 'mview.json')))
 base = mv['widgets'][0]
 
-# the scale's line, angular like BMW's M Performance view (M8 / Z4 M40i photos, Nov 23 2026): straight pieces with small
-# rounded corners instead of M view's wide arcs. Corners: (x, y, corner radius), from the end by the middle (a short
+# the scale's line, like BMW's M Performance view (M8 / Z4 M40i photos, Nov 23 2026): straight pieces with rounded
+# corners (60-120 px: firmer than M view's wide arcs, softer than hard knees), the top running nearly level (3 degrees),
+# clear of the hood (visible.js HOOD). Corners: (x, y, corner radius), from the end by the middle (a short
 # raised piece, then a step down, as BMW's bottom line by the check-control area) round to the top end. Written as
 # points where straight pieces and arcs meet plus "arcs" [cx, cy, r, sweep] per piece, as the shader takes it.
-CORNERS = [(842, 619, 0), (776, 619, 8), (752, 636, 8), (330, 636, 22), (130, 470, 22), (104, 385, 16),
-           (118, 292, 22), (300, 112, 22), (742, 26, 0)]
+CORNERS = [(842, 619, 0), (776, 619, 10), (752, 636, 10), (340, 636, 70), (120, 455, 60), (110, 320, 70),
+           (250, 92, 120), (742, 64, 0)]
 START_X = CORNERS[0][0]
 
 
@@ -98,8 +99,8 @@ def s_at_x(x, y):
     return bs
 
 
-# 0 on the bottom line at x 480 (30 then still on it, as BMW's), the top mark (330 km/h, 200 mph, 8000 rpm) 30 px before the end (clear of the line's fade)
-scale = [round(s_at_x(480, 636), 1), round(TOTAL - 30, 1)]
+# 0 on the bottom line at x 520 (30 then still on it, as BMW's; the marks miss the corners), the top mark (330 km/h, 200 mph, 8000 rpm) 30 px before the end (clear of the line's fade)
+scale = [round(s_at_x(520, 636), 1), round(TOTAL - 30, 1)]
 
 BAR = [22, 18, 188, 290]          # inner bracket gauges: offset inside the chevron edge, width, top y, bottom y
 BAR2 = [110, 18]                  # outer ones: offset, width (same top and bottom)
@@ -186,8 +187,8 @@ widgets += [
     # the gear over the right line, the drive mode under it
     dict(id='gear', type='atext', z=5, x=1350 - 44, y=332, w=87, h=65, cells=1, text='{{gearnum}}', font='s_gear', chars='PRND0123456789-', color='fg', align='center', rate=1, hotWhen='now'),
     T('mode', 1230, 424, 300, 29, '{{mode}}', 's_label', 'dim', 'center'),
-    T('rpm_unit', 1220, 586, 220, 29, '1/min x 1000', 's_unit', 'dim', 'center'),
-    T('scale_unit', 520, 586, 140, 29, '{{u:speedLc}}', 's_unit', 'dim', 'center'),
+    T('rpm_unit', 1170, 586, 220, 29, '1/min x 1000', 's_unit', 'dim', 'center'),
+    T('scale_unit', 570, 586, 140, 29, '{{u:speedLc}}', 's_unit', 'dim', 'center'),
     T('badge', 810, 70, 300, 29, '{{badge}}', 's_unit', 'dim', 'center'),
 ]
 

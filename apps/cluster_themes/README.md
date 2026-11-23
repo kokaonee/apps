@@ -63,7 +63,7 @@ The look of the M view in the newer M cars' Live Cockpit (M3, M4, M5), for any c
 
 ### Live Cockpit
 
-The look of BMW's own Live Cockpit Professional, in the angular shape of its M Performance view (straight scale lines with small rounded corners), with extras for plug-in hybrids.
+The look of BMW's own Live Cockpit Professional, in the shape of its M Performance view (straight scale lines with rounded corners, the tops nearly level), with extras for plug-in hybrids.
 
 - **Left:** speed along a white line of straight pieces, 0 to 200 mph (0 to 330 km/h), an orange-red needle with BMW's red glow and a warm trail from 0 to the needle. The speed in big figures over the line, with its unit.
 - **Right:** revs the same way, 0 to 8000 rpm, with yellow, orange and red dashes outside the line from your redline. The gear over the line, the drive mode under it.

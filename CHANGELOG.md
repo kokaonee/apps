@@ -4,6 +4,7 @@ Newest first. Dates are when the build was pushed.
 
 ## Nov 23 2026
 
+- **Cluster Themes 0.19.18:** Live Cockpit's outline a little rounder again (corners of 60 to 120 px), and the tops of the speed and rev scales run nearly level, as in BMW's M Performance view.
 - **Cluster Themes 0.19.17:** Live Cockpit takes the angular shape of BMW's M Performance view: straight scale lines with small rounded corners instead of M view's wide curves, the numbers set along them, the bottom lines stepping up towards the middle (no check-control frame), the speed and the gear both standing on their lines, and the rev limit as yellow, orange and red dashes outside the line.
 - **Cluster Themes 0.19.16:** the gearbox temperature and the consumption no longer drop to "--" while driving: once a unit has answered, a missed answer is asked again with the same identifier (waiting 1.5 s at most) instead of trying every identifier in the list, which could hold up all engine-unit readings for many seconds. The gearbox temperature keeps its last value for a minute. Live Cockpit's speed and gear figures follow every 50 ms update.
 - **Cluster Themes 0.19.15:** Live Cockpit's Waze map is no longer a small oval: it fills the whole middle between the two dark panels, like BMW's own map view, and fades out at the panels' edges and at the top and bottom. The lines over the speed and under the gear and the check-control frame stay drawn over it.
