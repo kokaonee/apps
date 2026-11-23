@@ -148,14 +148,14 @@
         34
       ],
       "hole": [
-        700,
-        78,
-        520,
-        506
+        500,
+        40,
+        920,
+        590
       ],
       "holeWhen": "mapUp",
       "holeInset": 0,
-      "holeOval": 70
+      "holeChevron": 45
     },
     {
       "id": "spd_us0",

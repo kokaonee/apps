@@ -91,7 +91,8 @@
  *             each panel's upper chevron edge, offset px inside it: oil on the left, the gearbox on the right, both 50..150 C),
  *             "bar2" [offset, width] (a second, outer one: coolant 50..150 C on the left, fuel consumption 0..LCP_CONS l/100 km
  *             on the right);
- *             the right corner dial is the hybrid battery (hvSoc) instead of oil
+ *             the right corner dial is the hybrid battery (hvSoc) instead of oil; "holeChevron" F: the map window is all of
+ *             "hole" between the two panels' chevron edges, faded over F px (BMW's map view), in place of "holeOval"
  *   vdash     effect layer; the whole Vector theme (shaders.js vdash, layout made by design/gen_vector.py): "tach" [cx, cy,
  *             inner r, outer r, start deg, sweep deg, segments] (revs 0..VDASH_RPM), "segs" (the bracket lines, at most
  *             20: [x0, y0, x1, y1, width, brightness 0..1]), "rings" (at most 4: {cx, cy, r, signal, min, max, color
@@ -2334,6 +2335,7 @@ class HudApp {
                 c.uniform(ref, 'u_tray', tr ? [tr[0] - w.x, tr[1] - w.x, tr[2] - w.y, tr[3]] : [0, 0, 0, 0]);
                 c.uniform(ref, 'u_bar', br ? [br[0], br[1], br[2] - w.y, br[3] - w.y] : [0, 0, 0, 0]);
                 c.uniform(ref, 'u_bar2', w.bar2 ? [w.bar2[0], w.bar2[1]] : [0, 0]);
+                c.uniform(ref, 'u_holeChev', [isNum(w.holeChevron) ? w.holeChevron : 0]);
             }
             c.uniform(ref, 'u_dial', [w.dial[0] - w.x, w.dial[1] - w.y, w.dial[2], 0]);
             c.uniform(ref, 'u_dialAng', w.dialAng);

@@ -1799,6 +1799,8 @@ uniform float u_holeR;
 uniform vec4 u_panel;      // the dark panel's inner edge: its top point x, y and its point at the middle x, y
 uniform vec4 u_panelB;     // its bottom point x, y; z: how far inside the line the panel starts (0 = no panel)
 uniform float u_oval;      // > 0: the map window is an oval inside u_hole, feathered over this many px
+uniform float u_holeChev;  // > 0: the map window is all of u_hole between the two panels' chevron edges (BMW's map
+                           // view), fading out over this many px at the edges and the rect's top and bottom
 
 const vec3 WHITE = vec3(0.92, 0.93, 0.95);
 const vec3 GREY = vec3(0.55, 0.57, 0.6);
@@ -1831,6 +1833,7 @@ void main() {
     bool right = p.x > u_size.x * 0.5;
     vec2 q = right ? vec2(u_size.x - p.x, p.y) : p;
     vec3 c = vec3(0.0);
+    float ink = 0.0;   // the lines and the tray: drawn over the map window too
 
     // the nearest point of the line: its arc length s and the signed distance sd (+ inside the scale); the corners
     // are true arcs (as mview), so the curve stays round
@@ -1949,17 +1952,20 @@ void main() {
     if (q.x >= ln.x && q.x <= ln.y) {
         float x0 = ln.x + 56.0;
         if (q.x < x0 - 8.0) {
-            c = put(c, WHITE, cov(abs(abs(q.y - ln.z) - 4.0) - 1.6));
+            float a = cov(abs(abs(q.y - ln.z) - 4.0) - 1.6);
+            c = put(c, WHITE, a); ink = max(ink, a);
         } else if (q.x >= x0) {
             float fade = smoothstep(x0, x0 + 60.0, q.x) * (1.0 - smoothstep(ln.y - 4.0, ln.y, q.x));
-            c = put(c, WHITE, cov(abs(q.y - ln.z) - 1.2) * (0.35 + 0.65 * fade));
+            float a = cov(abs(q.y - ln.z) - 1.2) * (0.35 + 0.65 * fade);
+            c = put(c, WHITE, a); ink = max(ink, a);
         }
     }
     // the bottom line, on from the scale's bottom end towards the middle
     vec2 b0 = u_path[0];
     if (q.x >= b0.x && q.x <= u_line.w) {
         float fade = 1.0 - smoothstep(u_line.w - 90.0, u_line.w, q.x);
-        c = put(c, WHITE, cov(abs(q.y - b0.y) - 1.2) * fade);
+        float a = cov(abs(q.y - b0.y) - 1.2) * fade;
+        c = put(c, WHITE, a); ink = max(ink, a);
     }
     // BMW's check-control tray between the scales: a flat top with rounded corners running down to the bottom line
     if (u_tray.w > 0.0) {
@@ -1970,11 +1976,20 @@ void main() {
         else if (p.x > cr.x) dT = p.y <= cr.y ? abs(length(p - cr) - rr) : abs(p.x - u_tray.y);
         else dT = abs(p.y - u_tray.z);
         float lowEnd = 1.0 - smoothstep(b0.y - 24.0, b0.y - 4.0, p.y);
-        c = put(c, GREY, cov(dT - 1.2) * lowEnd * step(u_tray.z - 2.0, p.y));
+        float a = cov(dT - 1.2) * lowEnd * step(u_tray.z - 2.0, p.y);
+        c = put(c, GREY, a); ink = max(ink, a);
     }
 
     float alpha = 1.0;
-    if (u_hole.z > 0.0 && u_oval > 0.0) {
+    if (u_hole.z > 0.0 && u_holeChev > 0.0) {
+        // between the chevron edges (inner < 0, either side: q is mirrored) and inside the rect, fading at both
+        float F = u_holeChev;
+        vec2 lo = p - u_hole.xy, hi = u_hole.xy + u_hole.zw - p;
+        float d = min(min(lo.x, hi.x), min(lo.y, hi.y));
+        float outRect = 1.0 - smoothstep(0.0, F, d);
+        float inPanel = smoothstep(-F, 0.0, inner);
+        alpha = max(max(outRect, inPanel), ink);
+    } else if (u_hole.z > 0.0 && u_oval > 0.0) {
         vec2 hs = u_hole.zw * 0.5;
         vec2 e = (p - (u_hole.xy + hs)) / hs;
         float ed = (length(e) - 1.0) * min(hs.x, hs.y);

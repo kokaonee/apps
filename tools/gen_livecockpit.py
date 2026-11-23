@@ -65,7 +65,8 @@ widgets = [{
     'tray': [770, 1150, 594, 34],            # BMW's check-control frame
     'bar': BAR, 'bar2': BAR2,
     'panel': PANEL,
-    'hole': [700, 78, 520, 506], 'holeWhen': 'mapUp', 'holeInset': 0, 'holeOval': 70,
+    # the map window: the whole middle between the panels' chevron edges, faded at the edges (BMW's own map view)
+    'hole': [500, 40, 920, 590], 'holeWhen': 'mapUp', 'holeInset': 0, 'holeChevron': 45,
 }]
 
 # the scale numbers, as in M view
