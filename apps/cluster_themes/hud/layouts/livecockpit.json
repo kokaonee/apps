@@ -610,7 +610,7 @@
       "chars": "0123456789-",
       "color": "fg",
       "align": "right",
-      "rate": 50
+      "rate": 1
     },
     {
       "id": "speed_unit",
@@ -639,7 +639,7 @@
       "chars": "PRND0123456789-",
       "color": "fg",
       "align": "center",
-      "rate": 50,
+      "rate": 1,
       "hotWhen": "now"
     },
     {

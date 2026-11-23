@@ -354,10 +354,16 @@ const LCP_TEMP = [50, 150], GEAR_HOT = 120, LCP_CONS = 30;
 // fuel consumption now (config.dme.fuelRate: litres an hour from the engine unit over read-only UDS / OBD, the first
 // candidate that answers): asked every FUEL_RATE_MS while shown; l/100 km = l/h / speed. The average is BMW's own trip
 // computer (KombiIF statusBordcomputerAverage); without it, this drive's from the fuel flow and the speed
-const FUEL_RATE_MS = 1000, FUEL_RATE_RETRY_MS = 60000, FUEL_RATE_STALE_MS = 4000, CONS_AVG_KM = 1;
+// stale after FUEL_RATE_STALE_MS (a few misses in a row): the consumption shows "--" rather than an old value
+const FUEL_RATE_MS = 1000, FUEL_RATE_RETRY_MS = 60000, FUEL_RATE_STALE_MS = 6000, CONS_AVG_KM = 1;
+// a unit that has answered keeps its candidate: a miss (a busy link, a timeout) is asked again at the normal pace
+// with that one only, and the whole list only after PICK_FAILS misses in a row (car test Nov 23 2026: walking the
+// list after every miss, up to 4 s a candidate, held the shared read loop for many seconds and blanked EGS and
+// consumption); candidates without their own "timeoutMs" wait DME_TIMEOUT_MS
+const PICK_FAILS = 10, DME_TIMEOUT_MS = 1500;
 // gearbox oil temperature (config.dme.gearbox, the gearbox unit EGS 0x18 over read-only UDS): every GEAR_EVERY_MS while a
 // shown widget uses {{gearT}}; a car that doesn't answer is asked once a minute
-const GEAR_EVERY_MS = 2000, GEAR_RETRY_MS = 60000, GEAR_STALE_MS = 10000;
+const GEAR_EVERY_MS = 2000, GEAR_RETRY_MS = 60000, GEAR_STALE_MS = 60000;   // gearbox oil changes slowly: the last value holds a minute
 const VDASH_RPM = 8000;            // the Vector theme's rev counter: 0..8
 const MEDIA_IF = 'de.bmw.infotainment.hmi.hmimediastate.HmiMediaState';   // the head unit's now playing (front)
 const MEDIA_TYPES = { 1: 'ARTIST', 2: 'ALBUM', 3: 'TITLE' };
@@ -1049,6 +1055,20 @@ class HudApp {
         const hasRate = !!(dme && Array.isArray(dme.fuelRate) && dme.fuelRate.length);
         let rateAsk = 0, rateMiss = 0;
         let DidReader = null;
+        const known = { gearbox: false, fuelRate: false }, fails = { gearbox: 0, fuelRate: 0 };
+        const quick = (c) => Object.assign({ timeoutMs: DME_TIMEOUT_MS }, c);
+        // the candidate that answered last, alone; the whole list until one has answered, or after PICK_FAILS misses
+        const ask = async (name, list) => {
+            if (known[name]) {
+                const v = await rd.read(quick(list[rd.pick[name] || 0]));
+                if (isNum(v)) { fails[name] = 0; return v; }
+                if (++fails[name] < PICK_FAILS) return null;
+                known[name] = false;
+            }
+            const v = await rd.value(name, list.map(quick));
+            if (isNum(v)) { known[name] = true; fails[name] = 0; }
+            return v;
+        };
         let rd = null, busy = false, baro = 101.3, baroAt = 0, intakeAsk = 0, hvAsk = 0, hvMiss = 0, fuelAsk = 0, fuelMiss = 0, gearAsk = 0, gearMiss = 0;
         try {
             // the kit's read-only link: anything but a read (22 / OBD 01) is refused before it leaves the head unit.
@@ -1065,8 +1085,8 @@ class HudApp {
             const wantIntake = hasIntake && this.needsIntake && now - intakeAsk >= 2000;   // a temperature: every 2 s is plenty
             const wantHv = this.needsHv && now - hvAsk >= (hvMiss >= 3 ? HV_RETRY_MS : HV_EVERY_MS);
             const wantFuel = this.needsFuel && now - fuelAsk >= (fuelMiss >= 3 ? FUEL_RETRY_MS : FUEL_EVERY_MS);
-            const wantGear = hasGear && this.needsGear && now - gearAsk >= (gearMiss >= 3 ? GEAR_RETRY_MS : GEAR_EVERY_MS);
-            const wantRate = hasRate && this.needsCons && now - rateAsk >= (rateMiss >= 3 ? FUEL_RATE_RETRY_MS : FUEL_RATE_MS);
+            const wantGear = hasGear && this.needsGear && now - gearAsk >= (gearMiss >= 3 && !known.gearbox ? GEAR_RETRY_MS : GEAR_EVERY_MS);
+            const wantRate = hasRate && this.needsCons && now - rateAsk >= (rateMiss >= 3 && !known.fuelRate ? FUEL_RATE_RETRY_MS : FUEL_RATE_MS);
             if (busy || this.car.data().demo || (!wantBoost && !wantIntake && !wantHv && !wantFuel && !wantGear && !wantRate)) return;
             busy = true;
             (async () => {
@@ -1092,17 +1112,17 @@ class HudApp {
                 }
                 if (wantRate) {
                     rateAsk = now;
-                    const r = await rd.value('fuelRate', dme.fuelRate);
+                    const r = await ask('fuelRate', dme.fuelRate);
                     if (isNum(r)) {
                         if (rateMiss >= 3 || !isNum(this.fuelRate)) this.log.info('fuel flow: ' + r.toFixed(2) + ' l/h from ' + DidReader.label(dme.fuelRate[rd.pick.fuelRate || 0]));
                         this.fuelRate = r; this.fuelRateAt = Date.now(); rateMiss = 0;
                     } else if (++rateMiss === 3) {
-                        this.log.info('fuel flow: no candidate answered (' + dme.fuelRate.map((c) => DidReader.label(c) + ' ' + ((rd.raws[rd.key(c)] || {}).why || '?')).join(', ') + '); asked once a minute');
+                        this.log.info('fuel flow: 3 misses (' + dme.fuelRate.map((c) => DidReader.label(c) + ' ' + ((rd.raws[rd.key(c)] || {}).why || '?')).join(', ') + ')' + (known.fuelRate ? '; asked on' : '; asked once a minute'));
                     }
                 }
                 if (wantGear) {
                     gearAsk = now;
-                    const t = await rd.value('gearbox', dme.gearbox);
+                    const t = await ask('gearbox', dme.gearbox);
                     if (isNum(t)) {
                         if (gearMiss >= 3 || !isNum(this.gearT)) {
                             const c = dme.gearbox[rd.pick.gearbox || 0];
@@ -1110,7 +1130,7 @@ class HudApp {
                         }
                         this.gearT = t; this.gearTAt = Date.now(); gearMiss = 0;
                     } else if (++gearMiss === 3) {
-                        this.log.info('gearbox oil: no candidate answered (' + dme.gearbox.map((c) => DidReader.label(c) + ' ' + ((rd.raws[rd.key(c)] || {}).why || '?')).join(', ') + '); asked once a minute');
+                        this.log.info('gearbox oil: 3 misses (' + dme.gearbox.map((c) => DidReader.label(c) + ' ' + ((rd.raws[rd.key(c)] || {}).why || '?')).join(', ') + ')' + (known.gearbox ? '; asked on' : '; asked once a minute'));
                     }
                 }
                 if (wantIntake) {
