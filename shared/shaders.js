@@ -1917,8 +1917,14 @@ void main() {
             float a = cov(along - (major ? 1.7 : 1.1)) * cov(sd - len) * smoothstep(2.0, 4.0, sd);
             c = put(c, major ? WHITE : GREY, a);
         }
-        // the rev scale: a red band just inside the line from the redline on
-        if (right && f >= u_redFrom && f <= 1.0) c = put(c, RED, cov(abs(sd - 7.0) - 3.5));
+        // the rev scale from the redline on: dashes just outside the line, yellow, orange, then red towards the end
+        // (BMW's M Performance view)
+        if (right && f >= u_redFrom && f <= 1.0) {
+            float zt = (f - u_redFrom) / max(1.0 - u_redFrom, 0.001);
+            vec3 zc = zt > 0.66 ? RED : zt > 0.33 ? vec3(1.0, 0.45, 0.08) : vec3(1.0, 0.78, 0.1);
+            float dash = step(3.0, mod(s - mix(s0, s1, u_redFrom), 26.0));
+            c = put(c, zc, cov(abs(sd + 7.0) - 3.0) * dash);
+        }
         // the needle: an orange-red bar from just outside the line inwards, with a soft glow
         float across = abs(s - sv);
         float reach = smoothstep(-12.0, -6.0, sd) * (1.0 - smoothstep(48.0, 56.0, sd));

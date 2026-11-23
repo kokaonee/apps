@@ -52,7 +52,7 @@ The look of BMW's newer Live Cockpit Sport view.
 
 The look of the M view in the newer M cars' Live Cockpit (M3, M4, M5), for any car. Asked for in issue #15.
 
-- **Left:** speed along a white line with rounded corners, 0 to 200 mph (0 to 330 km/h). The band inside the line lights up from 0 to the needle.
+- **Left:** speed along a white line of straight pieces, 0 to 200 mph (0 to 330 km/h). The band inside the line lights up from 0 to the needle.
 - **Right:** revs the same way, 0 to 8000 rpm, with yellow and red marks from your redline.
 - **Panels:** dark grey panels inside both scales, and a red glow by the needle, as on BMW's own M view.
 - **Middle:** the speed and the gear, each over its own line, with the speed in the other unit under it (km/h under mph, or the other way round) and the drive mode under the gear. With "Show Waze map inside the theme" on, the map shows in an oval window between the two scales that fades into the black, and the window opens and closes without the theme being built again.
@@ -63,14 +63,14 @@ The look of the M view in the newer M cars' Live Cockpit (M3, M4, M5), for any c
 
 ### Live Cockpit
 
-The look of BMW's own Live Cockpit Professional standard view (G20, G30, G05 and others), with extras for plug-in hybrids.
+The look of BMW's own Live Cockpit Professional, in the angular shape of its M Performance view (straight scale lines with small rounded corners), with extras for plug-in hybrids.
 
-- **Left:** speed along a white line with rounded corners, 0 to 200 mph (0 to 330 km/h), an orange-red needle with BMW's red glow and a warm trail from 0 to the needle. The speed in big figures under the line, with its unit.
-- **Right:** revs the same way, 0 to 8000 rpm, with a red band from your redline. The gear over the line, the drive mode under it.
+- **Left:** speed along a white line of straight pieces, 0 to 200 mph (0 to 330 km/h), an orange-red needle with BMW's red glow and a warm trail from 0 to the needle. The speed in big figures over the line, with its unit.
+- **Right:** revs the same way, 0 to 8000 rpm, with yellow, orange and red dashes outside the line from your redline. The gear over the line, the drive mode under it.
 - **Bracket gauges:** two in each dark panel, like BMW's sport displays, from left to right **Coolant** and **Oil** (50 to 150 °C), then **EGS** (gearbox oil, 50 to 150 °C) and **Mileage** (fuel consumption now, 0 to 30 l/100 km), each with its value on top. Beside Mileage, the average consumption (Ø) from BMW's own trip computer. Coolant and oil go red over your warning limits, the gearbox from 120 °C.
 - **Corners:** fuel on the far left and the **hybrid battery** on the far right, with its charge in % above the dial.
 - **Middle:** with "Show Waze map inside the theme" on, the map fills the middle between the two dark panels, like BMW's own map view, fading out at their edges; the window opens and closes without the theme being built again.
-- **Bottom:** BMW's check-control frame in the middle; range, clock and outside temperature along the bottom, with BMW's own gear letter.
+- **Bottom:** the scale lines step up towards the middle; range, clock and outside temperature along the bottom, with BMW's own gear letter.
 
 The gearbox oil temperature is read over the read-only link, first as the engine unit has it (DID 4650 on the B48 / B58 DME8FF_R), else from the gearbox unit (EGS); not yet checked on a car (`config.dme.gearbox`), and the log says which one answered. The consumption now comes from the engine unit's own fuel flow (DID 5656 on the B48 / B58 DME8FF_R, else 4521, OBD 5E, or the air mass as an estimate) over the speed; electric driving reads 0. The average (Ø) is BMW's own trip computer average (trip 1, as in the cluster) from the head unit; only if the car doesn't send it, this drive's own. Not yet checked on a car (`config.dme.fuelRate`). The layout is written by `tools/gen_livecockpit.py`.
 
