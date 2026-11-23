@@ -20,12 +20,49 @@ mv = json.load(open(os.path.join(LAYOUTS, 'mview.json')))
 base = mv['widgets'][0]
 
 # the scale's line, like BMW's M Performance view (M8 / Z4 M40i photos, Nov 23 2026): straight pieces with rounded
-# corners (200-260 px: one wide bend on the outer side instead of two, soft transitions; the straight pieces stay), the top running nearly level (3 degrees),
+# corners, see SHAPE / RADII below, the top running nearly level (3 degrees),
 # clear of the hood (visible.js HOOD). Corners: (x, y, corner radius), from the end by the middle (a short
 # raised piece, then a step down, as BMW's bottom line by the check-control area) round to the top end. Written as
 # points where straight pieces and arcs meet plus "arcs" [cx, cy, r, sweep] per piece, as the shader takes it.
-CORNERS = [(842, 619, 0), (776, 619, 20), (752, 636, 20), (350, 636, 200), (100, 400, 250), (260, 92, 260),
-           (742, 64, 0)]
+# The contour is 0.19.19's (SHAPE: corners with the radii it had), which the user liked; only the transitions are
+# softer (RADII). A wider fillet alone would cut each corner and pull the line towards the middle, so each corner point
+# moves outwards along its bisector until the wider arc's apex sits where 0.19.19's apex was (solve_corners).
+SHAPE = [(842, 619, 0), (776, 619, 16), (752, 636, 16), (340, 636, 130), (120, 455, 110), (110, 320, 120),
+         (250, 92, 180), (742, 64, 0)]
+RADII = [0, 20, 20, 210, 170, 180, 280, 0]
+KEEP_Y = {1, 2, 3}       # the corners of the bottom lines stay at their height (level lines)
+
+
+def _unit(x, y):
+    l = math.hypot(x, y); return (x / l, y / l)
+
+
+def _apex(prev, b, nxt, r):
+    """The arc's apex (its point on the bisector) of a corner b with radius r, and the bisector (pointing inwards)."""
+    u = _unit(prev[0] - b[0], prev[1] - b[1]); v = _unit(nxt[0] - b[0], nxt[1] - b[1])
+    ang = math.acos(max(-1, min(1, u[0] * v[0] + u[1] * v[1])))
+    bis = _unit(u[0] + v[0], u[1] + v[1])
+    d = r / math.sin(ang / 2) - r if r > 0 else 0
+    return (b[0] + bis[0] * d, b[1] + bis[1] * d), bis
+
+
+def solve_corners(shape, radii, rounds=40):
+    pts = [list(c[:2]) for c in shape]
+    want = [None] + [_apex(shape[i - 1], shape[i], shape[i + 1], shape[i][2])[0] for i in range(1, len(shape) - 1)] + [None]
+    for _ in range(rounds):
+        for i in range(1, len(pts) - 1):
+            if radii[i] <= 0: continue
+            a, bis = _apex(pts[i - 1], pts[i], pts[i + 1], radii[i])
+            ex, ey = want[i][0] - a[0], want[i][1] - a[1]
+            k = ex * bis[0] + ey * bis[1]                     # the error along the bisector
+            if i in KEEP_Y:                                    # a corner on the level bottom line: along it only
+                pts[i][0] += k / bis[0] if abs(bis[0]) > 0.2 else 0
+            else:
+                pts[i][0] += bis[0] * k; pts[i][1] += bis[1] * k
+    return [(round(p[0], 2), round(p[1], 2), r) for p, r in zip(pts, radii)]
+
+
+CORNERS = solve_corners(SHAPE, RADII)
 START_X = CORNERS[0][0]
 
 
@@ -125,8 +162,8 @@ widgets = [{
     'path': new_path, 'arcs': new_arcs, 'scale': scale,
     'dial': base['dial'], 'dialAng': base['dialAng'],
     # the lines under the speed and under the gear at one height (M Performance view: both figures stand on them)
-    'line': [306, 700, 410, START_X],        # under the speed; no bottom line beyond the scale's own
-    'lineR': [306, 690, 410],                # under the gear (left frame, mirrored)
+    'line': [252, 700, 410, START_X],        # under the speed; no bottom line beyond the scale's own
+    'lineR': [252, 690, 410],                # under the gear (left frame, mirrored)
     'bar': BAR, 'bar2': BAR2,
     'panel': PANEL,
     # the map window: the whole middle between the panels' chevron edges, faded at the edges (BMW's own map view)
