@@ -607,7 +607,8 @@
       "text": "{{speed}}",
       "font": "s_speed",
       "color": "fg",
-      "align": "right"
+      "align": "right",
+      "rate": 100
     },
     {
       "id": "speed_unit",
@@ -634,7 +635,8 @@
       "font": "s_gear",
       "color": "fg",
       "align": "center",
-      "hotWhen": "now"
+      "hotWhen": "now",
+      "rate": 100
     },
     {
       "id": "mode",

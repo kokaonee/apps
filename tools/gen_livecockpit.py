@@ -76,10 +76,11 @@ T = lambda id, x, y, w, h, text, font, color='fg', align='left', **k: dict(id=id
 
 widgets += [
     # the speed under the line, the unit beside it (BMW's standard view)
-    T('speed', 296, 350, 330, 68, '{{speed}}', 's_speed', align='right'),
+    # speed and gear re-draw up to 10 times a second (other text 5): they change the most while driving
+    T('speed', 296, 350, 330, 68, '{{speed}}', 's_speed', align='right', rate=100),
     T('speed_unit', 634, 352, 100, 29, '{{u:speedLc}}', 's_unit', 'dim'),
     # the gear over the right line, the drive mode under it
-    T('gear', 1220, 332, 260, 65, '{{gearnum}}', 's_gear', align='center', hotWhen='now'),
+    T('gear', 1220, 332, 260, 65, '{{gearnum}}', 's_gear', align='center', hotWhen='now', rate=100),
     T('mode', 1230, 424, 300, 29, '{{mode}}', 's_label', 'dim', 'center'),
     T('rpm_unit', 1220, 586, 220, 29, '1/min x 1000', 's_unit', 'dim', 'center'),
     T('scale_unit', 520, 586, 140, 29, '{{u:speedLc}}', 's_unit', 'dim', 'center'),

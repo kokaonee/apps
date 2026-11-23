@@ -4,6 +4,7 @@ Newest first. Dates are when the build was pushed.
 
 ## Nov 23 2026
 
+- **Cluster Themes 0.19.11:** Live Cockpit's speed and gear figures update up to 10 times a second instead of 5.
 - **Cluster Themes 0.19.10:** a new theme, **Live Cockpit**, after BMW's own Live Cockpit Professional standard view: the speed scale on the left, the rev scale on the right (round lines like M view's), the speed under the line and the gear over it, an orange-red needle with BMW's red glow. Four bracket gauges like BMW's sport displays, labelled **Coolant**, **Oil**, **EGS** (gearbox oil) and **Mileage** (fuel consumption now), with the average consumption beside it from BMW's own trip computer (trip 1). For plug-in hybrids the high-voltage battery sits in the lower right corner. The Waze map opens in the middle. New readouts: **Gearbox oil temperature**, **Fuel consumption now** and **Fuel consumption, this drive**, read from the engine unit over the read-only link (fuel flow 5656, gearbox temperature 4650 on the B48 / B58 DME, from cauliflowermossgrape's Live Data catalog). Not yet tested on a car.
 
 ## Nov 22 2026
