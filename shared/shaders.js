@@ -1991,8 +1991,8 @@ void main() {
         // between the chevron edges (inner < 0, either side: q is mirrored) and inside the rect, fading at both
         float F = u_holeChev;
         vec2 lo = p - u_hole.xy, hi = u_hole.xy + u_hole.zw - p;
-        float d = min(min(lo.x, hi.x), min(lo.y, hi.y));
-        float outRect = 1.0 - smoothstep(0.0, F, d);
+        // faded at the sides, a crisp top and bottom (flush with the grey panels' top and bottom)
+        float outRect = max(1.0 - smoothstep(0.0, F, min(lo.x, hi.x)), 1.0 - smoothstep(0.0, 1.5, min(lo.y, hi.y)));
         float inPanel = smoothstep(-F, 0.0, inner);
         alpha = max(max(outRect, inPanel), ink);
     } else if (u_hole.z > 0.0 && u_oval > 0.0) {

@@ -177,6 +177,8 @@ scale = [round(s_at_x(520, 636), 1), round(TOTAL - 30, 1)]
 BAR = [22, 18, 188, 290]          # inner bracket gauges: offset inside the chevron edge, width, top y, bottom y
 BAR2 = [110, 18]                  # outer ones: offset, width (same top and bottom)
 PANEL = [[790, 30], [530, 398], [650, 640], 34]
+# the map window's top and bottom: flush with the grey panels, which start PANEL[3] px inside the line (y 64 / 636)
+HOLE_T, HOLE_B = 64 + PANEL[3], 636 - PANEL[3]
 
 
 def chevron_x(y):
@@ -202,7 +204,7 @@ widgets = [{
     'bar': BAR, 'bar2': BAR2,
     'panel': PANEL,
     # the map window: the whole middle between the panels' chevron edges, faded at the edges (BMW's own map view)
-    'hole': [500, 40, 920, 590], 'holeWhen': 'mapUp', 'holeInset': 0, 'holeChevron': 45,
+    'hole': [500, HOLE_T, 920, HOLE_B - HOLE_T], 'holeWhen': 'mapUp', 'holeInset': 0, 'holeChevron': 45,
 }]
 
 # the scale numbers along the line, at their marks, set inwards past the long mark (30 px) by their own half size in

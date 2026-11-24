@@ -223,9 +223,9 @@
       ],
       "hole": [
         500,
-        40,
+        98,
         920,
-        590
+        504
       ],
       "holeWhen": "mapUp",
       "holeInset": 0,

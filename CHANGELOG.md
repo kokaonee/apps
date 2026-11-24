@@ -2,6 +2,10 @@
 
 Newest first. Dates are when the build was pushed.
 
+## Nov 24 2026
+
+- **Cluster Themes 0.19.23:** Live Cockpit's map window ends flush with the grey panels at the top and bottom (it reached above them), with crisp top and bottom edges; the sides still fade into the panels.
+
 ## Nov 23 2026
 
 - **Cluster Themes 0.19.22:** Live Cockpit's two slanted sides (30 to 120 and 150 to 210 km/h, and their mirror on the rev scale) bow out a little instead of running dead straight. The small step of the bottom lines by the middle has sharp corners now (the line has room for 16 points).
