@@ -4,6 +4,7 @@ Newest first. Dates are when the build was pushed.
 
 ## Nov 24 2026
 
+- **Cluster Themes 0.19.24:** The speed digits glide to each new speed from the car (87, 88, 89, 90 instead of jumping from 87 to 90), over 0.6 of the time between two samples and at most 300 ms, like the needle. Once a minute while driving, the log says how often the speed came (`speed: N samples in 60 s, every … ms on average, longest gap … ms`).
 - **Cluster Themes 0.19.23:** Live Cockpit's map window ends flush with the grey panels at the top and bottom (it reached above them), with crisp top and bottom edges; the sides still fade into the panels.
 
 ## Nov 23 2026

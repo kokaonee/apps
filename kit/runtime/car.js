@@ -117,6 +117,7 @@ class Car {
         const put = (k, v, tick) => {
             if (v === null || v === undefined || (typeof v === 'number' && !isFinite(v))) return;
             this.live[k] = v; this.lastCar = Date.now();
+            if (k === 'speed') this.speedN = (this.speedN || 0) + 1;   // samples counted, to tell a new one from a repeat
             // learned gear while driving; nothing at a standstill - the guess can't tell P, N or D
             // there, and "N" shown in park or in D was wrong
             if (k === 'rpm' || k === 'speed') { const g = this.guess.feed(this.live.rpm, this.live.speed); if (g !== null || this.live.speed < 3) this.guessed = this.live.speed < 3 ? undefined : g; }

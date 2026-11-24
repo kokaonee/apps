@@ -363,6 +363,8 @@ const FUEL_RATE_MS = 1000, FUEL_RATE_RETRY_MS = 60000, FUEL_RATE_STALE_MS = 6000
 const PICK_FAILS = 10, DME_TIMEOUT_MS = 1500;
 // gearbox oil temperature (config.dme.gearbox, the gearbox unit EGS 0x18 over read-only UDS): every GEAR_EVERY_MS while a
 // shown widget uses {{gearT}}; a car that doesn't answer is asked once a minute
+// the speed digits' glide to each new sample (_smoothSpeed): 0.6 of the gap between samples, within these; the rate's log line
+const SPEED_GLIDE_MIN_MS = 60, SPEED_GLIDE_MAX_MS = 300, SPEED_RATE_LOG_MS = 60000;
 const GEAR_EVERY_MS = 2000, GEAR_RETRY_MS = 60000, GEAR_STALE_MS = 60000;   // gearbox oil changes slowly: the last value holds a minute
 const VDASH_RPM = 8000;            // the Vector theme's rev counter: 0..8
 const MEDIA_IF = 'de.bmw.infotainment.hmi.hmimediastate.HmiMediaState';   // the head unit's now playing (front)
@@ -581,6 +583,7 @@ class HudApp {
         this.atlases = new Map();        // "<conn>:<font>" -> { ref, c, ci, cols, rows, cellW, cellH, chars, bytes }: R8 assets, kept across rebuilds
         this.targetState = null;         // { state, holder, reason } of our target
         this.rpmF = null; this.rpmShown = null; this.lastTickT = 0;
+        this.spd = null; this.spdN = -1; this.spdLog = { t: 0, n: 0, sum: 0, max: 0 };   // _smoothSpeed
         this.themeName = null;
         this.flash = false;
         this.problem = null;             // why nothing shows (a bad layout), for the status line
@@ -1864,7 +1867,7 @@ class HudApp {
             case 'runLabel': return us ? '0-60 MPH' : '0-100 KM/H';
             case 'warm': { const o = this._raw('oil'); return isNum(o) ? (o < 80 ? 'WARMING UP' : 'ENGINE WARM') : ''; }
             case 'badge': return badges.text(this.setting('badge'), this.setting('badgeBMW') === true);
-            case 'speed': { const v = this._raw('speed'); return fix(isNum(v) ? (us ? v * 0.621371 : v) : v, 0); }
+            case 'speed': { const v = this._speedNow(Date.now()); return fix(isNum(v) ? (us ? v * 0.621371 : v) : v, 0); }
             case 'u:speed': return us ? 'MPH' : 'KM/H';
             case 'mediaTitle': return this._mediaOn() ? this.media.title : '';
             case 'mediaArtist': return this._mediaOn() ? this.media.artist : '';
@@ -2718,6 +2721,7 @@ class HudApp {
     _tick() {
         const now = Date.now();
         this._smoothRpm(now);
+        this._smoothSpeed(now);
         this._cueTick(now);
         if (now - (this.bumpAt || 0) >= 1000) { this.bumpAt = now; smartTemps.bumpTick(this); }
         // the 0-60 timer only on the car's own data (the demo drive would set a best time)
@@ -2766,6 +2770,41 @@ class HudApp {
         if (!isNum(raw)) { this.rpmF = null; this.rpmShown = null; return; }
         this.rpmF = isNum(this.rpmF) ? this.rpmF + (raw - this.rpmF) * (1 - Math.exp(-dt / 120)) : raw;
         if (!isNum(this.rpmShown) || Math.abs(this.rpmF - this.rpmShown) >= 40) this.rpmShown = Math.max(0, Math.round(this.rpmF / 50) * 50);
+    }
+
+    /**
+     * The speed readout glides like the needle: the car sends a new speed a few times a second, so the digits count
+     * from the shown value to each new one over 0.6 of the gap between samples (at most 300 ms) (87, 88, 89, 90 instead of 87, 90).
+     * Once a minute while driving, the log says how often the speed came (SPEED_RATE_LOG_MS).
+     */
+    _smoothSpeed(now) {
+        const d = this.car.data(), raw = d.speed;
+        if (!isNum(raw)) { this.spd = null; return; }
+        const n = d.demo ? raw : this.car.speedN;
+        const s = this.spd;
+        if (n !== this.spdN) {
+            const gap = s && s.at ? now - s.at : 0;
+            const L = this.spdLog;
+            if (!d.demo && gap > 0 && gap < 5000) { L.n++; L.sum += gap; L.max = Math.max(L.max, gap); }
+            const avg = L.n ? L.sum / L.n : SPEED_GLIDE_MAX_MS;
+            const from = s ? this._speedNow(now) : raw;
+            this.spd = { from, to: raw, t0: now, at: now, dur: Math.max(SPEED_GLIDE_MIN_MS, Math.min(SPEED_GLIDE_MAX_MS, 0.6 * Math.min(avg, gap || avg))) };
+            this.spdN = n;
+        }
+        const L = this.spdLog;
+        if (!L.t) L.t = now;
+        if (now - L.t >= SPEED_RATE_LOG_MS) {
+            if (L.n >= 10 && raw > 5) this.log.info('speed: ' + L.n + ' samples in ' + Math.round((now - L.t) / 1000) + ' s, every ' + Math.round(L.sum / L.n) + ' ms on average, longest gap ' + L.max + ' ms');
+            this.spdLog = { t: now, n: 0, sum: 0, max: 0 };
+        }
+    }
+
+    /** The speed readout's value now: on its way from the last shown value to the newest sample. */
+    _speedNow(now) {
+        const s = this.spd;
+        if (!s) return this._raw('speed');
+        const f = Math.min(1, (now - s.t0) / s.dur);
+        return s.from + (s.to - s.from) * f;
     }
 
     _update(x, now, force) {
