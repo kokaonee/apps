@@ -88,8 +88,8 @@
  *             keys ("path", "scale", "dial", "dialAng", "line", "panel", "hole" ...; speed 0..MVIEW_SPEED, revs 0..MVIEW_RPM)
  *             plus "lineR" [x0, x1, y] (the line under the gear, target px of the LEFT frame, mirrored), "tray" [x0, x1, y, r]
  *             (BMW's check-control frame between the scales) and "bar" [offset, width, yTop, yBottom] (a bracket gauge along
- *             each panel's upper chevron edge, offset px inside it: oil on the left, the gearbox on the right, both 50..150 C),
- *             "bar2" [offset, width] (a second, outer one: coolant 50..150 C on the left, fuel consumption 0..LCP_CONS l/100 km
+ *             each panel's upper chevron edge, offset px inside it: oil on the left, the gearbox on the right, both 0..150 C),
+ *             "bar2" [offset, width] (a second, outer one: coolant 0..150 C on the left, fuel consumption 0..LCP_CONS l/100 km
  *             on the right);
  *             the right corner dial is the hybrid battery (hvSoc) instead of oil; "holeChevron" F: the map window is all of
  *             "hole" between the two panels' chevron edges, faded over F px (BMW's map view), in place of "holeOval"
@@ -349,8 +349,8 @@ const TILE_MAX = 14;       // half a flash: red, then the normal colour
 // widgets that show the shift cue (the reaction time is learned only while one of them is drawn)
 const MVIEW_RPM = 8000;            // the M view theme's rev scale: 0..8
 const MVIEW_SPEED = { us: 200, metric: 330 };
-// the Live Cockpit theme's bracket gauges: oil and gearbox 50..150 C; the gearbox counts as hot from GEAR_HOT C
-const LCP_TEMP = [50, 150], GEAR_HOT = 120, LCP_CONS = 30;
+// the Live Cockpit theme's bracket gauges: coolant, oil and gearbox 0..150 C (user, Nov 26); the gearbox counts as hot from GEAR_HOT C
+const LCP_TEMP = [0, 150], GEAR_HOT = 120, LCP_CONS = 30;
 // fuel consumption now (config.dme.fuelRate: litres an hour from the engine unit over read-only UDS / OBD, the first
 // candidate that answers): asked every FUEL_RATE_MS while shown; l/100 km = l/h / speed. The average is BMW's own trip
 // computer (KombiIF statusBordcomputerAverage); without it, this drive's from the fuel flow and the speed

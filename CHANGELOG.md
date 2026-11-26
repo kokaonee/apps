@@ -4,6 +4,7 @@ Newest first. Dates are when the build was pushed.
 
 ## Nov 26 2026
 
+- **Cluster Themes 0.19.26:** Live Cockpit's coolant, oil and gearbox (EGS) gauges run from 0 to 150 °C (were 50 to 150), so a cold engine already shows a little.
 - **Cluster Themes 0.19.25:** Live Cockpit shows cruise control and the speed limiter with their set speed under the speed ("CC 120", "LIM 120") and Auto Hold under the drive mode ("AUTO H", green while it holds the car), from BMW's own driver assistance and stability control messages. First version: the set speed's scale and the cruise control's states are not known yet, so every change is logged (`cruise: …`, `standstill: …`). Not yet tested on a car.
 
 ## Nov 24 2026
