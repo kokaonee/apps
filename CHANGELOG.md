@@ -2,6 +2,10 @@
 
 Newest first. Dates are when the build was pushed.
 
+## Nov 26 2026
+
+- **Cluster Themes 0.19.25:** Live Cockpit shows cruise control and the speed limiter with their set speed under the speed ("CC 120", "LIM 120") and Auto Hold under the drive mode ("AUTO H", green while it holds the car), from BMW's own driver assistance and stability control messages. First version: the set speed's scale and the cruise control's states are not known yet, so every change is logged (`cruise: …`, `standstill: …`). Not yet tested on a car.
+
 ## Nov 24 2026
 
 - **Cluster Themes 0.19.24:** The speed digits glide to each new speed from the car (87, 88, 89, 90 instead of jumping from 87 to 90), over 0.6 of the time between two samples and at most 300 ms, like the needle. Once a minute while driving, the log says how often the speed came (`speed: N samples in 60 s, every … ms on average, longest gap … ms`).

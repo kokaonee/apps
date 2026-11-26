@@ -557,6 +557,7 @@ class HudApp {
         this.needsGear = false;          // a shown widget uses the gearbox temperature
         this.fuelRate = null; this.fuelRateAt = 0;   // l/h, the engine's fuel flow (config.dme.fuelRate)
         this.consL = 0; this.consKm = 0;  // this drive: litres burnt and km driven while the fuel flow was known
+        this.ldm = null; this.ldmLog = ''; this.standstill = null; this.standLog = '';   // cruise control / limiter (FASuS), Auto Hold (DSC)
         this.bcAvg = null; this.bcAvgAt = 0; this.bcAvgSeen = false;   // l/100 km, BMW's trip computer average (KombiIF)
         this.needsCons = false;          // a shown widget uses the consumption
         this.needsHv = false;            // a shown widget uses it
@@ -792,6 +793,31 @@ class HudApp {
             },
             // tyre pressure and temperature per corner, in the car's own display units (_tyreBar / _tyreC).
             // The car never notifies these (BMW's own x_call only ever reads them), so they are polled.
+            // cruise control / ACC and the speed limiter: BMW's own cluster display message for them (driver assistance,
+            // longitudinal guidance). activeFunction: 1 cruise control (XCC), 3 speed limiter (SLD), 2 hill descent; the
+            // set speed in valueRequestSpeed (4095 = none). Its scale and displayXCC / displaySLD's states aren't known
+            // yet: every change is logged ("cruise: ...") to work them out on the car.
+            'de.bmw.infotainment.fasus.FASuS': {
+                displayDriverAssistenceSystemLongitudinalGuidance: (v) => {
+                    if (!v) return;
+                    const g = { fn: v.activeFunctionDriverAssistenceSystemLDM, xcc: v.displayXCC, sld: v.displaySLD, req: v.valueRequestSpeed,
+                        reqShow: v.displayRequestSpeed, isa: v.statusISA2, gap: v.displayGapChoice, gapInfo: v.displayGapInformation, hdc: v.displayHDC };
+                    this.ldm = Object.assign(g, { at: Date.now() });
+                    const k = JSON.stringify(g);
+                    if (k !== this.ldmLog) { this.ldmLog = k; this.log.info('cruise: ' + k); }
+                },
+            },
+            // Auto Hold (and the parking brake, hill hold) from the stability control's standstill functions.
+            // statusAutoH: 0 off, 1 on (not holding), 2 holding the car. Changes are logged ("standstill: ...").
+            'de.bmw.chassis.VehicleStabilizationManagement': {
+                StandStillFunction: (v) => {
+                    if (!v) return;
+                    const g = { autoH: v.statusAutoH, epb: v.statusParkingBrake, hill: v.statusHillholdAssistant, led: v.dummy1 };
+                    this.standstill = Object.assign(g, { at: Date.now() });
+                    const k = JSON.stringify(g);
+                    if (k !== this.standLog) { this.standLog = k; this.log.info('standstill: ' + k); }
+                },
+            },
             'de.bmw.infotainment.vehicle.TPMS': {
                 $pollMs: 10000,
                 statusTyrePressure: (v) => TYRE_CORNERS.forEach((k) => { this.tyres.p[k] = this._tyreBar(v && v['actualValuePressureTyre' + k + 'H']); }),
@@ -1957,6 +1983,16 @@ class HudApp {
                 const d = this.car.data();
                 return (d.stage === 'D' || (!d.stage && isNum(d.gear))) && isNum(d.gear) && d.gear > 0 ? String(d.gear) : '';
             }
+            case 'cruise': {      // "CC 120" / "LIM 120" while cruise control or the speed limiter is on
+                const g = this._ldmNow();
+                if (!g || (g.fn !== 1 && g.fn !== 3)) return '';
+                const v = isNum(g.req) && g.req > 0 && g.req < 4095 ? ' ' + Math.round(g.req) : '';   // the car's own unit, as sent
+                return (g.fn === 3 ? 'LIM' : 'CC') + v;
+            }
+            case 'autoH': {       // AUTO H while Auto Hold is on (green while it holds the car)
+                const g = this.standstill;
+                return g && (g.autoH === 1 || g.autoH === 2) ? 'AUTO H' : '';
+            }
             case 'mode': {
                 if (!this.driveMode) return '';
                 if (this.driveVariant === 'adaptive') return 'ADAPTIVE';
@@ -2799,6 +2835,17 @@ class HudApp {
         }
     }
 
+    /** The last cruise control / limiter message (a field: it holds until the car sends a new one). */
+    _ldmNow() {
+        return this.ldm;
+    }
+
+    /** "colorFrom" on a text widget: a colour for its state (Auto Hold green while it holds the car), else null. */
+    _colorFrom(what) {
+        if (what === 'autoH') { const g = this.standstill; return g && g.autoH === 2 ? LIGHTS.green.concat(255) : null; }
+        return null;
+    }
+
     /** The speed readout's value now: on its way from the last shown value to the newest sample. */
     _speedNow(now) {
         const s = this.spd;
@@ -2828,6 +2875,7 @@ class HudApp {
             if (!force && now - x.lastPaint < (w.rate || TEXT_MS)) return;
             let s = (w.navHide && this.navShown) || smartTemps.hidden(this, w) || !this._shownNow(w) ? '' : this._resolve(w.text);   // nav turn showing / "showWhen"
             let role = w.color || 'fg';
+            if (w.colorFrom) role = this._colorFrom(w.colorFrom) || role;
             if (w.colorBy === 'verdict' && this.score.last) role = VERDICT[this.score.last.verdict] || role;
             if (w.near && this._nearMark(w.near[0]) === w.near[1]) role = w.nearColor || 'fg';
             // a readout slot goes red / blue at the shift point only while it shows engine speed or the shift point

@@ -262,6 +262,10 @@ widgets += [
     # the gear over the right line, the drive mode under it
     dict(id='gear', type='atext', z=5, x=1350 - 44, y=332, w=87, h=65, cells=1, text='{{gearnum}}', font='s_gear', chars='PRND0123456789-', color='fg', align='center', rate=1, hotWhen='now'),
     T('mode', 1230, 424, 300, 29, '{{mode}}', 's_label', 'dim', 'center'),
+    # under the speed line: cruise control / limiter and its set speed ("CC 120", "LIM 120"); under the drive mode:
+    # AUTO H (green while it holds the car). Empty while off.
+    T('cruise', 380, 424, 246, 29, '{{cruise}}', 's_label', 'fg', 'center'),
+    T('autoh', 1310, 462, 140, 29, '{{autoH}}', 's_label', 'fg', 'center', colorFrom='autoH', conn=1),
     T('rpm_unit', 1170, 586, 220, 29, '1/min x 1000', 's_unit', 'dim', 'center', conn=1),
     T('scale_unit', 570, 586, 140, 29, '{{u:speedLc}}', 's_unit', 'dim', 'center'),
     T('badge', 810, 70, 300, 29, '{{badge}}', 's_unit', 'dim', 'center'),

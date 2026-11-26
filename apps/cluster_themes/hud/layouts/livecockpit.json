@@ -740,6 +740,34 @@
       "conn": 1
     },
     {
+      "id": "cruise",
+      "type": "text",
+      "z": 5,
+      "x": 380,
+      "y": 424,
+      "w": 246,
+      "h": 29,
+      "text": "{{cruise}}",
+      "font": "s_label",
+      "color": "fg",
+      "align": "center"
+    },
+    {
+      "id": "autoh",
+      "type": "text",
+      "z": 5,
+      "x": 1310,
+      "y": 462,
+      "w": 140,
+      "h": 29,
+      "text": "{{autoH}}",
+      "font": "s_label",
+      "color": "fg",
+      "align": "center",
+      "colorFrom": "autoH",
+      "conn": 1
+    },
+    {
       "id": "rpm_unit",
       "type": "text",
       "z": 5,
