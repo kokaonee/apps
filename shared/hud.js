@@ -364,6 +364,11 @@ const PICK_FAILS = 10, DME_TIMEOUT_MS = 1500;
 // gearbox oil temperature (config.dme.gearbox, the gearbox unit EGS 0x18 over read-only UDS): every GEAR_EVERY_MS while a
 // shown widget uses {{gearT}}; a car that doesn't answer is asked once a minute
 // the speed digits' glide to each new sample (_smoothSpeed): 0.6 of the gap between samples, within these; the rate's log line
+// an enum value as its number: the SOME/IP layer may hand over the name ("XCC_AKTIV") or the number
+const enumNum = (v, names) => (typeof v === 'number' ? v : v && names[v] !== undefined ? names[v] : null);
+// JSON.stringify replacer: without a message's counters and checksums (they change with every message)
+const noCounters = (k, v) => (/^(length|counter|dataID|cRC|crc|alive.*|checksum.*|qualifier.*)$/i.test(k) ? undefined : v);
+const LDM_FN = { KEINE_LAENGSDYNAMIKFUNKTION_AKTIV: 0, XCC_AKTIV: 1, HDC_AKTIV: 2, SLD_AKTIV: 3 };
 const SPEED_GLIDE_MIN_MS = 60, SPEED_GLIDE_MAX_MS = 300, SPEED_RATE_LOG_MS = 60000;
 const GEAR_EVERY_MS = 2000, GEAR_RETRY_MS = 60000, GEAR_STALE_MS = 60000;   // gearbox oil changes slowly: the last value holds a minute
 const VDASH_RPM = 8000;            // the Vector theme's rev counter: 0..8
@@ -794,17 +799,24 @@ class HudApp {
             // tyre pressure and temperature per corner, in the car's own display units (_tyreBar / _tyreC).
             // The car never notifies these (BMW's own x_call only ever reads them), so they are polled.
             // cruise control / ACC and the speed limiter: BMW's own cluster display message for them (driver assistance,
-            // longitudinal guidance). activeFunction: 1 cruise control (XCC), 3 speed limiter (SLD), 2 hill descent; the
-            // set speed in valueRequestSpeed (4095 = none). Its scale and displayXCC / displaySLD's states aren't known
-            // yet: every change is logged ("cruise: ...") to work them out on the car.
+            // longitudinal guidance), from FASuS and (newer software) the DASS traffic sign display. Enums arrive as
+            // names or numbers (enumNum). Active function: 1 cruise control / ACC (XCC), 3 speed limiter (SLD), 2 hill
+            // descent; the set speed in the car's unit as sent (its scale isn't confirmed yet: every change is logged).
             'de.bmw.infotainment.fasus.FASuS': {
                 displayDriverAssistenceSystemLongitudinalGuidance: (v) => {
                     if (!v) return;
-                    const g = { fn: v.activeFunctionDriverAssistenceSystemLDM, xcc: v.displayXCC, sld: v.displaySLD, req: v.valueRequestSpeed,
-                        reqShow: v.displayRequestSpeed, isa: v.statusISA2, gap: v.displayGapChoice, gapInfo: v.displayGapInformation, hdc: v.displayHDC };
-                    this.ldm = Object.assign(g, { at: Date.now() });
-                    const k = JSON.stringify(g);
-                    if (k !== this.ldmLog) { this.ldmLog = k; this.log.info('cruise: ' + k); }
+                    this._ldmFeed('fasus', { fn: enumNum(v.activeFunctionDriverAssistenceSystemLDM, LDM_FN), req: v.valueRequestSpeed,
+                        xcc: v.displayXCC, sld: v.displaySLD, reqShow: v.displayRequestSpeed, isa: v.statusISA2 }, v);
+                },
+            },
+            'de.bmw.dass.driverassistanceapplications.TrafficSignDisplayControl': {
+                displayDriverAssistanceLongitudinal: (v) => {
+                    if (!v) return;
+                    const x = v.dispXCC || {}, l = v.dispSLD || {}, r = v.dispRequestedSpeed || {};
+                    this._ldmFeed('dass', { fn: enumNum(v.activeFuncLongitudinal, LDM_FN), req: v.valueRequestedSpeed,
+                        xcc: enumNum(x.dispXCCStatus, { NO_DISP_XCC: 0, DISP_ACC: 1, DISP_XCC: 2 }), on: x.functionActive,
+                        sld: enumNum(l.dispSLDStatus, { SLD_OFF: 0, SLD_STANDBY: 1, SLD_ACTIVE: 2 }), mph: r.unitOfRequestedSpeedValue,
+                        invalid: v.invalidFlag }, v);
                 },
             },
             // Auto Hold (and the parking brake, hill hold) from the stability control's standstill functions.
@@ -812,10 +824,11 @@ class HudApp {
             'de.bmw.chassis.VehicleStabilizationManagement': {
                 StandStillFunction: (v) => {
                     if (!v) return;
-                    const g = { autoH: v.statusAutoH, epb: v.statusParkingBrake, hill: v.statusHillholdAssistant, led: v.dummy1 };
+                    const g = { autoH: enumNum(v.statusAutoH, { AUTOH_NICHT_AKTIVIERT: 0, AUTOH_AKTIVIERT_UND_HAELT_FAHRZEUG_NICHT: 1, AUTOH_AKTIVIERT_UND_HAELT_FAHRZEUG: 2 }),
+                        epb: v.statusParkingBrake, hill: v.statusHillholdAssistant };
                     this.standstill = Object.assign(g, { at: Date.now() });
-                    const k = JSON.stringify(g);
-                    if (k !== this.standLog) { this.standLog = k; this.log.info('standstill: ' + k); }
+                    const k = JSON.stringify(v, noCounters);
+                    if (k !== this.standLog) { this.standLog = k; this.log.info('standstill: ' + JSON.stringify(g) + ' raw ' + k.slice(0, 400)); }
                 },
             },
             'de.bmw.infotainment.vehicle.TPMS': {
@@ -2833,6 +2846,13 @@ class HudApp {
             if (L.n >= 10 && raw > 5) this.log.info('speed: ' + L.n + ' samples in ' + Math.round((now - L.t) / 1000) + ' s, every ' + Math.round(L.sum / L.n) + ' ms on average, longest gap ' + L.max + ' ms');
             this.spdLog = { t: now, n: 0, sum: 0, max: 0 };
         }
+    }
+
+    /** A cruise control / limiter message from either source; logged whenever it changes, with the raw message. */
+    _ldmFeed(src, g, raw) {
+        this.ldm = Object.assign(g, { src, at: Date.now() });
+        const r = JSON.stringify(raw, noCounters), k = src + r;
+        if (k !== this.ldmLog) { this.ldmLog = k; this.log.info('cruise (' + src + '): ' + JSON.stringify(g) + ' raw ' + r.slice(0, 400)); }
     }
 
     /** The last cruise control / limiter message (a field: it holds until the car sends a new one). */

@@ -2,6 +2,10 @@
 
 Newest first. Dates are when the build was pushed.
 
+## Nov 27 2026
+
+- **Cluster Themes 0.19.27:** Cruise control, speed limiter and Auto Hold: enum values are read whether the car sends their name or their number (0.19.25 only took numbers, a likely reason nothing showed); a second source for cruise control and the limiter (the newer driver assistance traffic sign display); the log now has each message raw (`cruise (fasus|dass): …`, `standstill: …`) and whether each service subscribed (`signal FASuS subscribed`).
+
 ## Nov 26 2026
 
 - **Cluster Themes 0.19.26:** Live Cockpit's coolant, oil and gearbox (EGS) gauges run from 0 to 150 °C (were 50 to 150), so a cold engine already shows a little.
