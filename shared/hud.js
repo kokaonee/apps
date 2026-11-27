@@ -367,7 +367,7 @@ const PICK_FAILS = 10, DME_TIMEOUT_MS = 1500;
 // an enum value as its number: the SOME/IP layer may hand over the name ("XCC_AKTIV") or the number
 const enumNum = (v, names) => (typeof v === 'number' ? v : v && names[v] !== undefined ? names[v] : null);
 // JSON.stringify replacer: without a message's counters and checksums (they change with every message)
-const noCounters = (k, v) => (/^(length|counter|dataID|cRC|crc|alive.*|checksum.*|qualifier.*)$/i.test(k) ? undefined : v);
+const noCounters = (k, v) => (/^(length|counter|dataID|crc.*|chl.*|alive.*|checksum.*|qualifier.*)$/i.test(k) ? undefined : v);
 const LDM_FN = { KEINE_LAENGSDYNAMIKFUNKTION_AKTIV: 0, XCC_AKTIV: 1, HDC_AKTIV: 2, SLD_AKTIV: 3 };
 const SPEED_GLIDE_MIN_MS = 60, SPEED_GLIDE_MAX_MS = 300, SPEED_RATE_LOG_MS = 60000;
 const GEAR_EVERY_MS = 2000, GEAR_RETRY_MS = 60000, GEAR_STALE_MS = 60000;   // gearbox oil changes slowly: the last value holds a minute
@@ -562,7 +562,7 @@ class HudApp {
         this.needsGear = false;          // a shown widget uses the gearbox temperature
         this.fuelRate = null; this.fuelRateAt = 0;   // l/h, the engine's fuel flow (config.dme.fuelRate)
         this.consL = 0; this.consKm = 0;  // this drive: litres burnt and km driven while the fuel flow was known
-        this.ldm = null; this.ldmLog = ''; this.standstill = null; this.standLog = '';   // cruise control / limiter (FASuS), Auto Hold (DSC)
+        this.ldmBy = {}; this.ldmLog = {}; this.standstill = null; this.standLog = '';   // cruise control / limiter (FASuS), Auto Hold (DSC)
         this.bcAvg = null; this.bcAvgAt = 0; this.bcAvgSeen = false;   // l/100 km, BMW's trip computer average (KombiIF)
         this.needsCons = false;          // a shown widget uses the consumption
         this.needsHv = false;            // a shown widget uses it
@@ -2850,14 +2850,16 @@ class HudApp {
 
     /** A cruise control / limiter message from either source; logged whenever it changes, with the raw message. */
     _ldmFeed(src, g, raw) {
-        this.ldm = Object.assign(g, { src, at: Date.now() });
-        const r = JSON.stringify(raw, noCounters), k = src + r;
-        if (k !== this.ldmLog) { this.ldmLog = k; this.log.info('cruise (' + src + '): ' + JSON.stringify(g) + ' raw ' + r.slice(0, 400)); }
+        this.ldmBy[src] = Object.assign(g, { src, at: Date.now() });
+        const r = JSON.stringify(raw, noCounters);
+        if (r !== this.ldmLog[src]) { this.ldmLog[src] = r; this.log.info('cruise (' + src + '): ' + JSON.stringify(g) + (isNum(g.req) ? ' req 0x' + g.req.toString(16) : '') + ' raw ' + r.slice(0, 600)); }
     }
 
-    /** The last cruise control / limiter message (a field: it holds until the car sends a new one). */
+    /** The cruise control / limiter state now: from the source that reports one on (both repeat a few times a second). */
     _ldmNow() {
-        return this.ldm;
+        // both sources may report: take one that has cruise control or the limiter on (FASuS first), else nothing
+        const by = this.ldmBy || {}, on = (g) => g && (g.fn === 1 || g.fn === 3) && Date.now() - g.at < 10000;
+        return on(by.fasus) ? by.fasus : on(by.dass) ? by.dass : null;
     }
 
     /** "colorFrom" on a text widget: a colour for its state (Auto Hold green while it holds the car), else null. */
