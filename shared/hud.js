@@ -562,7 +562,7 @@ class HudApp {
         this.needsGear = false;          // a shown widget uses the gearbox temperature
         this.fuelRate = null; this.fuelRateAt = 0;   // l/h, the engine's fuel flow (config.dme.fuelRate)
         this.consL = 0; this.consKm = 0;  // this drive: litres burnt and km driven while the fuel flow was known
-        this.ldmBy = {}; this.ldmLog = {}; this.standstill = null; this.standLog = '';   // cruise control / limiter (FASuS), Auto Hold (DSC)
+        this.ldmBy = {}; this.ldmLog = {}; this.setSpeed = null; this.setSpeedLog = ''; this.standstill = null; this.standLog = '';   // cruise control / limiter (FASuS), Auto Hold (DSC)
         this.bcAvg = null; this.bcAvgAt = 0; this.bcAvgSeen = false;   // l/100 km, BMW's trip computer average (KombiIF)
         this.needsCons = false;          // a shown widget uses the consumption
         this.needsHv = false;            // a shown widget uses it
@@ -817,6 +817,16 @@ class HudApp {
                         xcc: enumNum(x.dispXCCStatus, { NO_DISP_XCC: 0, DISP_ACC: 1, DISP_XCC: 2 }), on: x.functionActive,
                         sld: enumNum(l.dispSLDStatus, { SLD_OFF: 0, SLD_STANDBY: 1, SLD_ACTIVE: 2 }), mph: r.unitOfRequestedSpeedValue,
                         invalid: v.invalidFlag }, v);
+                },
+            },
+            // another candidate for the set speed (FASuS's valueRequestSpeed read a constant 2050 on the car):
+            // the driver assistance function availability's valueSetSpeed (4095 = none). Changes logged ("set speed: ...").
+            'de.bmw.dass.driverassistanceapplications.MultimodalControlDriverAssistance': {
+                functionAvailabilityDriverAssistance: (v) => {
+                    if (!v) return;
+                    this.setSpeed = { v: v.valueSetSpeed, info: v.infoSetSpeed, at: Date.now() };
+                    const k = JSON.stringify(v, noCounters);
+                    if (k !== this.setSpeedLog) { this.setSpeedLog = k; this.log.info('set speed: ' + k.slice(0, 600)); }
                 },
             },
             // Auto Hold (and the parking brake, hill hold) from the stability control's standstill functions.
@@ -2000,7 +2010,8 @@ class HudApp {
                 const g = this._ldmNow();
                 if (!g || (g.fn !== 1 && g.fn !== 3)) return '';
                 // the set speed only while it is plausible: the field read a constant 2050 on the car (G30, Nov 27), whatever was set
-                const v = isNum(g.req) && g.req >= 5 && g.req <= 300 ? ' ' + Math.round(g.req) : '';
+                const ok = (n) => isNum(n) && n >= 5 && n <= 300, ss = this.setSpeed && this.setSpeed.v;
+                const v = ok(g.req) ? ' ' + Math.round(g.req) : ok(ss) ? ' ' + Math.round(ss) : '';
                 return (g.fn === 3 ? 'LIM' : 'CC') + v;
             }
             case 'autoH': {       // AUTO H while Auto Hold is on (green while it holds the car)
