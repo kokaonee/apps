@@ -1999,7 +1999,8 @@ class HudApp {
             case 'cruise': {      // "CC 120" / "LIM 120" while cruise control or the speed limiter is on
                 const g = this._ldmNow();
                 if (!g || (g.fn !== 1 && g.fn !== 3)) return '';
-                const v = isNum(g.req) && g.req > 0 && g.req < 4095 ? ' ' + Math.round(g.req) : '';   // the car's own unit, as sent
+                // the set speed only while it is plausible: the field read a constant 2050 on the car (G30, Nov 27), whatever was set
+                const v = isNum(g.req) && g.req >= 5 && g.req <= 300 ? ' ' + Math.round(g.req) : '';
                 return (g.fn === 3 ? 'LIM' : 'CC') + v;
             }
             case 'autoH': {       // AUTO H while Auto Hold is on (green while it holds the car)

@@ -4,6 +4,7 @@ Newest first. Dates are when the build was pushed.
 
 ## Nov 27 2026
 
+- **Cluster Themes 0.19.29:** "CC" / "LIM" show a set speed only while it is plausible (5 to 300): on the car the field read a constant 2050 whatever was set; until the right field is found, just "CC" / "LIM".
 - **Cluster Themes 0.19.28:** Cruise control / limiter: the two sources no longer overwrite each other (the one reporting cruise control or the limiter on wins); the log leaves out the messages' checksums and counters, which made every message (5 a second) a new log line and pushed the drive out of the log; the set speed is logged in hex too.
 - **Cluster Themes 0.19.27:** Cruise control, speed limiter and Auto Hold: enum values are read whether the car sends their name or their number (0.19.25 only took numbers, a likely reason nothing showed); a second source for cruise control and the limiter (the newer driver assistance traffic sign display); the log now has each message raw (`cruise (fasus|dass): …`, `standstill: …`) and whether each service subscribed (`signal FASuS subscribed`).
 
